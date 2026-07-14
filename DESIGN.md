@@ -45,7 +45,7 @@ The application should fill the viewport without causing routine page scrolling 
 
 Persistent tabs appear centered at the top of every screen without a full-width containing bar.
 
-Reserve a small amount of space above the header, show primary currency first, then draw a separator matching the bottom progress bar's horizontal bounds. Place wide, compact-height tabs below the separator. Do not repeat the game title in this top area.
+Reserve a small amount of space above the header, show Points first, then draw a separator matching the bottom progress bar's horizontal bounds. Place wide, compact-height tabs below the separator. Do not repeat the game title in this top area.
 
 ### Initial tabs
 
@@ -82,12 +82,12 @@ Desktop:
 
 - A centered lock game occupies the primary visual area.
 - Current run score appears in the center of the lock.
-- Primary currency appears in the top status area above the navigation separator.
+- Points appear in the top status area above the navigation separator.
 - Upgrade sections remain hidden until progression unlocks them.
 
 Mobile:
 
-- Primary currency remains in the top status area.
+- Points remain in the top status area.
 - The lock scales to fit the width while remaining circular.
 - Controls remain large enough for touch input.
 
@@ -95,8 +95,8 @@ Mobile:
 
 At minimum, show:
 
-- Current primary currency above the navigation separator
-- Current run score and requirement centered inside the lock, such as `7 / 20`
+- Current Points above the navigation separator
+- Current run score and requirement centered inside the lock, such as `7 / 50`
 - A large `Click to Play` idle/restart prompt
 
 Use the shared big-number formatting utilities for resource values. Run hit counts may remain ordinary integers.
@@ -138,7 +138,7 @@ The mechanic should follow the recognizable Pop the Lock timing loop:
 8. Each hit increases marker speed and decreases the possible distance to the next target.
 9. The run succeeds after the required number of targets has been hit.
 
-Initial required hit count: **20**.
+Initial required hit count: **50**.
 
 ### Input methods
 
@@ -168,7 +168,7 @@ A successful hit should produce brief, restrained feedback:
 
 - Target flashes with `--color-success` or `--color-accent`.
 - A small expanding ring or particle burst may appear.
-- Display a fading `+currency` gain label near the target that was hit.
+- Display a fading `+Points` gain label near the target that was hit, prefixed with `CRIT` for critical gains.
 - On the final target, keep this label at the normal per-target `+1`; present the separate completion bonus only on the win screen.
 - The progress number updates immediately.
 - The direction reversal should be visually obvious but not jarring.
@@ -190,13 +190,24 @@ The loss animation must not be a rapid screen flash. Respect reduced-motion pref
 
 ### Run completion feedback
 
-On completing all 20 hits:
+On completing all 50 hits:
 
 - Stop active input.
 - Show a clear gold `Jackpot!` state that cannot be confused with failure, with the completion bonus displayed beneath the heading.
 - Award the run reward exactly once.
 - Use gold particles, an outward ring, or a comparable celebratory animation.
 - Do not apply the failure cooldown; allow immediate replay input and otherwise return to idle after the brief celebration.
+
+### Points and upgrades
+
+- Each target begins at a base value of 1 Point. Repeatable Target Value levels add 25% and cost `5 × 1.5^level` Points, rounded to the nearest integer.
+- At 10 lifetime Points, fade in one-time upgrades for consecutive value (20), one forgiven miss (25), Critical Hits (50), a three-second failure cooldown (100), and 20% lower speed scaling (150).
+- Consecutive value begins at 1× on the first target and scales subsequent uninterrupted targets by 1.05×. A forgiven miss skips the target without Points or hit progress, resets the streak, reverses direction, and consumes the run's allowance.
+- Critical Hits begin at 2% chance and grant 5× target Points. Critical-chance levels add 0.5 percentage points, cost `25 × 1.5^level` rounded to the nearest integer, and cap at 100%.
+- The completion bonus is 25% of the run's accumulated pre-critical target values, so critical hits do not multiply it.
+- Place upgrade cards directly below the lock without a surrounding section panel. Separate repeatable and one-time sections with a horizontal divider.
+- Preserve purchased one-time cards with a green success outline and reveal only the next three unpurchased one-time upgrades. Repeatable cards do not receive a purchased outline and instead show their cumulative result. Newly revealed cards must enter the layout without reserved empty slots.
+- When Second Chance is consumed, use a light ocean-blue activation effect and grant 200ms of invulnerability. Ignore inputs during that window, and safely relocate a target if it is passed before protection expires.
 
 ### Animation timing
 
@@ -268,7 +279,7 @@ When enabled, eligible inactive tabs may receive the red attention outline descr
 
 A compact status area is fixed or anchored to the bottom of the application.
 
-Center the version label immediately above a nearly full-width dark progress track. Place the goal text over the track itself, following the compact incremental-game reference layout rather than a multi-column footer.
+Center the version label immediately above a nearly full-width dark progress track. Place the goal text over the track itself, following the compact incremental-game reference layout rather than a multi-column footer. Keep the sticky footer background transparent so content remains visible around the version and progress track.
 
 ### Version label
 
@@ -280,7 +291,7 @@ Keep the version in one source of truth and inject or import it where displayed.
 
 ### Goal progress bar
 
-Show progress toward the next meaningful game goal.
+Show progress first toward 10 lifetime Points, then toward purchasing Critical Hits. Keep the Critical Hits goal complete until a later goal is configured.
 
 Required content:
 
@@ -288,6 +299,8 @@ Required content:
 - Text describing the goal
 - Current progress and requirement
 - Percentage completion
+
+For goals completed by buying an unlock, display only the requirement label; omit numeric progress and percentage text.
 
 Example:
 

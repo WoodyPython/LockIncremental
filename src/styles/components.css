@@ -16,7 +16,7 @@
   height: 18px;
 }
 
-.header-currency {
+.header-points {
   display: flex;
   align-items: baseline;
   justify-content: center;
@@ -28,7 +28,7 @@
   text-transform: uppercase;
 }
 
-.header-currency strong {
+.header-points strong {
   color: var(--color-accent);
   font-size: 1.25rem;
 }
@@ -93,13 +93,16 @@ main {
 .upgrades {
   display: grid;
   gap: 24px;
+  margin-top: 24px;
 }
 
 .upgrade-section {
-  padding: 16px;
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-surface);
+  padding: 0;
+}
+
+.upgrade-section + .upgrade-section {
+  padding-top: 24px;
+  border-top: var(--border-width) solid var(--color-border);
 }
 
 .upgrade-section h2 {
@@ -109,17 +112,38 @@ main {
 
 .upgrade-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
 }
 
 .upgrade-card {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   padding: 14px;
   border: 2px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface-raised);
+}
+
+.upgrade-card.is-unlocking {
+  animation: upgrade-unlock 420ms ease-out both;
+}
+
+.upgrade-card.is-purchased {
+  border-color: var(--color-success);
+  box-shadow: 0 0 0 2px var(--color-success);
+}
+
+@keyframes upgrade-unlock {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .upgrade-card h3 {
@@ -130,6 +154,13 @@ main {
 .upgrade-card p {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+}
+
+.upgrade-level {
+  margin: 10px 0 8px;
+  color: var(--color-accent);
+  font-size: 0.82rem;
+  font-weight: 800;
 }
 
 .upgrade-card button {
@@ -196,8 +227,7 @@ main {
   position: sticky;
   bottom: 0;
   z-index: 9;
-  padding: 5px 10px 8px;
-  background: var(--color-bg);
+  padding: 0 10px 8px;
   text-align: center;
 }
 
@@ -206,6 +236,15 @@ main {
   color: var(--color-text);
   font-size: 0.74rem;
   font-weight: 700;
+  text-shadow:
+    -1px -1px 0 var(--color-outline),
+    0 -1px 0 var(--color-outline),
+    1px -1px 0 var(--color-outline),
+    -1px 0 0 var(--color-outline),
+    1px 0 0 var(--color-outline),
+    -1px 1px 0 var(--color-outline),
+    0 1px 0 var(--color-outline),
+    1px 1px 0 var(--color-outline);
 }
 
 .goal-track {

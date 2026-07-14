@@ -5,6 +5,7 @@ import {
   HIT_TOLERANCE_RADIANS,
   INITIAL_MAX_TARGET_TRAVEL_RADIANS,
   INITIAL_MIN_TARGET_TRAVEL_RADIANS,
+  REQUIRED_HITS,
   activeSpeedForHits,
   targetTravelBoundsForHits,
 } from './constants'
@@ -37,8 +38,12 @@ describe('angular math', () => {
   it('places early targets farther away and later targets closer', () => {
     expect(placeTarget(0, 1, () => 0, 0)).toBeCloseTo(INITIAL_MIN_TARGET_TRAVEL_RADIANS)
     expect(placeTarget(0, 1, () => 1, 0)).toBeCloseTo(INITIAL_MAX_TARGET_TRAVEL_RADIANS)
-    expect(placeTarget(0, 1, () => 0, 19)).toBeCloseTo(FINAL_MIN_TARGET_TRAVEL_RADIANS)
-    expect(placeTarget(0, 1, () => 1, 19)).toBeCloseTo(FINAL_MAX_TARGET_TRAVEL_RADIANS)
+    expect(placeTarget(0, 1, () => 0, REQUIRED_HITS - 1)).toBeCloseTo(
+      FINAL_MIN_TARGET_TRAVEL_RADIANS,
+    )
+    expect(placeTarget(0, 1, () => 1, REQUIRED_HITS - 1)).toBeCloseTo(
+      FINAL_MAX_TARGET_TRAVEL_RADIANS,
+    )
   })
 
   it('increases speed while shrinking target travel as score rises', () => {
@@ -50,7 +55,7 @@ describe('angular math', () => {
   })
 
   it('places counter-clockwise targets ahead across zero', () => {
-    expect(placeTarget(0, -1, () => 0, 19)).toBeCloseTo(
+    expect(placeTarget(0, -1, () => 0, REQUIRED_HITS - 1)).toBeCloseTo(
       FULL_CIRCLE - FINAL_MIN_TARGET_TRAVEL_RADIANS,
     )
   })

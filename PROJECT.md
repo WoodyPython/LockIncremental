@@ -4,9 +4,9 @@
 
 **Working title:** Lock Incremental
 
-Lock Incremental is a static browser incremental game built around an active circular timing challenge inspired by the arcade game Pop the Lock. The player starts a run, taps when a rotating marker reaches a target on the lock, and continues through a sequence of targets. Each successful hit reverses rotation and places the next target. A mistimed input ends the run. The initial run length is 20 successful hits.
+Lock Incremental is a static browser incremental game built around an active circular timing challenge inspired by the arcade game Pop the Lock. The player starts a run, taps when a rotating marker reaches a target on the lock, and continues through a sequence of targets. Each successful hit reverses rotation and places the next target. A mistimed input ends the run. The initial run length is 50 successful hits.
 
-Completed runs award a primary currency that will support incremental progression, upgrades, higher goals, and longer-term systems. The first release should focus on a polished core loop and a reliable save system rather than a large amount of content.
+Successful targets and completed runs award the primary resource, **Points**, which supports incremental progression, upgrades, higher goals, and longer-term systems. The first release should focus on a polished core loop and a reliable save system rather than a large amount of content.
 
 ## 2. Product Principles
 
@@ -31,7 +31,7 @@ The lock marker spins continuously as a visual attract state. The player clicks 
 4. On success, progress increases by one.
 5. The target relocates and rotation reverses.
 6. On an early input or when the rotating bar passes the target, the run ends without completion rewards.
-7. At 20 successful hits, the run completes and awards currency.
+7. At 50 successful hits, the run completes and awards a bonus worth 25% of that run's pre-critical target values.
 
 Each successful target increases the marker speed and reduces the placement distance for later targets, so longer runs demand faster reactions and more precise perception.
 
@@ -52,9 +52,9 @@ Completion awards the calculated reward once, updates lifetime progress, shows a
 - Main and Settings tabs
 - Canvas-rendered circular lock game
 - Idle, active, failed, and completed run states
-- Initial run requirement of 20 hits
+- Initial run requirement of 50 hits
 - Mouse, touch, Space, and Enter controls
-- Primary currency and lifetime total
+- Current Points and lifetime Points total
 - At least one basic upgrade or progression hook, even if early balancing is provisional
 - Goal progress bar and version label at the bottom
 - Manual save
@@ -94,7 +94,7 @@ A component framework is intentionally omitted. The project has a small number o
 
 ### Big numbers
 
-Use **`break_infinity.js`** for currency, costs, rewards, lifetime totals, goal thresholds, and future incremental values. It is designed for incremental games that need values beyond JavaScript's ordinary numeric range and favors speed over high-precision arithmetic.
+Use **`break_infinity.js`** for Points, costs, rewards, lifetime totals, goal thresholds, and future incremental values. It is designed for incremental games that need values beyond JavaScript's ordinary numeric range and favors speed over high-precision arithmetic.
 
 Use native numbers for frame timing, geometry, angles, and bounded integer counters.
 
@@ -139,8 +139,8 @@ The save should contain:
 
 - Schema version
 - Save timestamp
-- Primary currency
-- Lifetime currency or equivalent lifetime progression
+- Current Points
+- Lifetime Points or equivalent lifetime progression
 - Upgrade levels
 - Goal progression or data needed to derive it
 - Statistics such as attempts, successes, best partial run, and completed runs
@@ -158,13 +158,13 @@ On load, default to idle. This avoids ambiguous scoring after a refresh.
 
 ## 7. Progression Direction
 
-The initial economy should be simple:
+The initial economy is based on one Point per successful target and a completion bonus equal to 25% of the run's accumulated pre-critical target value. Base upgrades are:
 
-- Completing a run grants the primary currency.
-- Performance may influence rewards later, but the first formula should be understandable.
-- Upgrades may alter reward, marker speed, target tolerance, run length, or unlock new mechanics.
-- Avoid upgrades that trivialize the timing mechanic too early.
-- Goals provide clear medium-term objectives and determine the bottom progress bar.
+- Repeatable Target Value levels cost `5 × 1.5^level`, rounded to the nearest integer, and add 25% target value per level.
+- At 10 lifetime Points, reveal one-time upgrades for 1.05× consecutive-target scaling (20), one forgiven miss per run (25), Critical Hits (50), a three-second failure cooldown (100), and 20% lower per-hit speed scaling (150).
+- Critical Hits begin at 2% chance and award 5× target Points. Repeatable critical-chance levels cost `25 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
+- A forgiven miss awards no Points, does not advance successful-hit progress, resets the consecutive multiplier, relocates the target, reverses direction, and grants 200ms of input/pass invulnerability.
+- Goals first track 10 lifetime Points and then ownership of the Critical Hits upgrade.
 
 All economy values must be data-driven and use `Decimal` where growth can become large.
 
@@ -181,11 +181,11 @@ Potential future systems, not required initially:
 
 ### Top
 
-Primary currency appears at the top above a bounded separator. Centered persistent tab navigation with Main and Settings sits below the separator without a surrounding navigation bar, and the active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
+Points appear at the top above a bounded separator. Centered persistent tab navigation with Main and Settings sits below the separator without a surrounding navigation bar, and the active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
 
 ### Center
 
-The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center, while primary currency appears above the navigation separator. Upgrade sections remain hidden until progression unlocks them.
+The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center, while Points appear above the navigation separator. Upgrades sit directly below the lock and fade in as progression unlocks them. One-time upgrades retain purchased cards and reveal only the next three unpurchased choices.
 
 The Settings tab contains save/import/export controls, autosave controls, and tab-notification controls. It does not contain offline-progress, Discord, or support controls.
 
@@ -223,7 +223,7 @@ Exact commands may change with the chosen TypeScript configuration, but equivale
 - Canvas resize and render loop
 - Idle spinning marker
 - Run state machine
-- Target placement, hit detection, reversal, miss, and 20-hit completion
+- Target placement, hit detection, reversal, miss, and 50-hit completion
 
 ### Milestone 2: Application shell
 
@@ -260,4 +260,4 @@ Exact commands may change with the chosen TypeScript configuration, but equivale
 
 ## 11. Definition of Initial Success
 
-The initial release is successful when a new player can open the static site, understand how to start, complete or fail a responsive 20-hit timing run, earn visible progress, safely save or transfer that progress, and return later in the same browser without data loss. The game should feel coherent and expandable even before deep progression systems are added.
+The initial release is successful when a new player can open the static site, understand how to start, complete or fail a responsive 50-hit timing run, earn visible progress, safely save or transfer that progress, and return later in the same browser without data loss. The game should feel coherent and expandable even before deep progression systems are added.

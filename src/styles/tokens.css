@@ -17,6 +17,7 @@
   --color-outline: #050505;
   --color-gold: #e1b12c;
   --color-gold-light: #ffe28a;
+  --color-shield: #36b8ed;
   --color-goal-track: #103e2a;
   --color-goal-fill: #287f49;
   --color-shadow: rgba(2, 31, 30, 0.45);
@@ -40,6 +41,7 @@
   --color-outline: #050505;
   --color-gold: #e1b12c;
   --color-gold-light: #ffe28a;
+  --color-shield: #36b8ed;
   --color-goal-track: #123b27;
   --color-goal-fill: #2b7949;
   --color-shadow: rgba(8, 4, 3, 0.55);
@@ -63,6 +65,7 @@
   --color-outline: #050505;
   --color-gold: #e1b12c;
   --color-gold-light: #ffe28a;
+  --color-shield: #36b8ed;
   --color-goal-track: #0d3824;
   --color-goal-fill: #2e7d4d;
   --color-shadow: rgba(2, 14, 8, 0.5);
@@ -86,6 +89,7 @@
   --color-outline: #050505;
   --color-gold: #e1b12c;
   --color-gold-light: #ffe28a;
+  --color-shield: #36b8ed;
   --color-goal-track: #123a27;
   --color-goal-fill: #327b4e;
   --color-shadow: rgba(0, 0, 0, 0.5);

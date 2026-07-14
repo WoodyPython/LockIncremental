@@ -1,8 +1,10 @@
+import Decimal from 'break_infinity.js'
 import type { GameSnapshot } from '../game/GameSimulation'
-import { COMPLETION_BONUS_RATE, TARGET_HALF_WIDTH_RADIANS, TARGET_REWARD } from '../game/constants'
+import { TARGET_HALF_WIDTH_RADIANS } from '../game/constants'
 import { cooldownRemainingMs } from '../game/RunState'
+import { formatDecimal } from '../utils/format'
 
-export type LockEffect = 'hit' | 'miss' | 'completed' | null
+export type LockEffect = 'hit' | 'critical' | 'forgiven' | 'miss' | 'completed' | null
 
 interface Palette {
   readonly background: string
@@ -16,11 +18,13 @@ interface Palette {
   readonly success: string
   readonly gold: string
   readonly goldLight: string
+  readonly shield: string
 }
 
 interface GainEffect {
   readonly angle: number
-  readonly amount: number
+  readonly amount: Decimal
+  readonly critical: boolean
   readonly startedAt: number
 }
 
@@ -42,8 +46,8 @@ export class LockRenderer {
     this.effectStartedAt = now
   }
 
-  public showGain(angle: number, amount: number, now: number): void {
-    this.gains.push({ angle, amount, startedAt: now })
+  public showGain(angle: number, amount: Decimal, critical: boolean, now: number): void {
+    this.gains.push({ angle, amount: new Decimal(amount), critical, startedAt: now })
   }
 
   public render(snapshot: GameSnapshot, now: number): void {
@@ -193,10 +197,13 @@ export class LockRenderer {
       this.context.font = `700 ${Math.max(12, size * 0.03)}px system-ui, sans-serif`
       this.context.fillText('COOLDOWN', center, center + size * 0.09)
     } else if (run.kind === 'completed') {
-      const bonus = run.requiredHits * TARGET_REWARD * COMPLETION_BONUS_RATE
       this.context.fillStyle = palette.goldLight
       this.context.font = `800 ${Math.max(15, size * 0.04)}px system-ui, sans-serif`
-      this.context.fillText(`+${bonus} BONUS`, center, center + size * 0.1)
+      this.context.fillText(
+        `+${formatDecimal(run.completionBonus)} BONUS`,
+        center,
+        center + size * 0.1,
+      )
     }
   }
 
@@ -249,17 +256,29 @@ export class LockRenderer {
     this.context.font = `800 ${Math.max(16, size * 0.045)}px system-ui, sans-serif`
     this.context.textAlign = 'center'
     this.context.textBaseline = 'middle'
-    this.context.fillText(`+${gain.amount}`, x, y)
+    this.context.fillText(`${gain.critical ? 'CRIT ' : ''}+${formatDecimal(gain.amount)}`, x, y)
     this.context.globalAlpha = 1
   }
 
   private drawPulse(center: number, radius: number, effectAge: number, palette: Palette): void {
     if (this.effect === null || this.reduceMotion.matches || effectAge < 0) return
-    if (this.effect !== 'hit' && this.effect !== 'completed') return
+    if (
+      this.effect !== 'hit' &&
+      this.effect !== 'critical' &&
+      this.effect !== 'forgiven' &&
+      this.effect !== 'completed'
+    ) {
+      return
+    }
     const duration = this.effect === 'completed' ? 450 : 250
     const progress = Math.min(1, effectAge / duration)
     this.context.globalAlpha = 1 - progress
-    this.context.strokeStyle = this.effect === 'hit' ? palette.success : palette.gold
+    this.context.strokeStyle =
+      this.effect === 'completed' || this.effect === 'critical'
+        ? palette.gold
+        : this.effect === 'forgiven'
+          ? palette.shield
+          : palette.success
     this.context.lineWidth = 5
     this.context.beginPath()
     this.context.arc(center, center, radius * (0.55 + progress * 0.7), 0, Math.PI * 2)
@@ -271,6 +290,8 @@ export class LockRenderer {
     if (snapshot.run.kind === 'failed') return palette.danger
     if (snapshot.run.kind === 'completed') return palette.gold
     if (this.effect === 'hit') return palette.success
+    if (this.effect === 'critical') return palette.gold
+    if (this.effect === 'forgiven') return palette.shield
     return palette.ring
   }
 
@@ -289,6 +310,7 @@ export class LockRenderer {
       success: color('--color-success'),
       gold: color('--color-gold'),
       goldLight: color('--color-gold-light'),
+      shield: color('--color-shield'),
     }
   }
 }

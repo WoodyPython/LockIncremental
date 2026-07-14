@@ -1,11 +1,10 @@
-import Decimal from 'break_infinity.js'
-import { GameSimulation } from '../game/GameSimulation'
-import { GOAL_REQUIREMENT, TARGET_REWARD } from '../game/constants'
+import { GameSimulation, type GameSnapshot } from '../game/GameSimulation'
+import { currentGoal } from '../game/goals'
 import { LockRenderer } from '../rendering/LockRenderer'
 import { GameLoop } from '../runtime/GameLoop'
 import { InputController } from '../runtime/InputController'
 import { applyTheme, DEFAULT_THEME, THEMES, type ThemeId } from '../ui/themes'
-import { createUpgradesView } from '../ui/upgradesView'
+import { UpgradesView } from '../ui/upgradesView'
 import { decimalProgress, formatDecimal } from '../utils/format'
 import { GAME_NAME, GAME_VERSION } from '../version'
 
@@ -16,11 +15,12 @@ export class App {
   private renderer!: LockRenderer
   private loop!: GameLoop
   private input!: InputController
-  private currencyValue!: HTMLElement
+  private pointsValue!: HTMLElement
   private goalText!: HTMLElement
   private goalFill!: HTMLElement
   private liveRegion!: HTMLElement
-  private lastReadout = ''
+  private upgradesView!: UpgradesView
+  private lastUiSignature = ''
 
   public constructor(private readonly root: HTMLElement) {}
 
@@ -30,9 +30,9 @@ export class App {
       <div class="app-shell">
         <header class="topbar">
           <div class="top-space" aria-hidden="true"></div>
-          <div class="header-currency" aria-label="Current currency">
-            <span>Currency</span>
-            <strong data-readout="currency">0</strong>
+          <div class="header-points" aria-label="Current Points">
+            <span>Points</span>
+            <strong data-readout="points">0</strong>
           </div>
           <div class="header-separator" aria-hidden="true"></div>
           <nav class="tabs" aria-label="Primary navigation">
@@ -53,7 +53,7 @@ export class App {
                 aria-label="Lock game. Activate to start, then activate when the rotating bar overlaps the target."
               ></canvas>
             </div>
-            <div data-upgrades hidden></div>
+            <div data-upgrades></div>
           </section>
           <section class="tab-panel settings-panel" data-panel="settings" hidden aria-labelledby="settings-heading">
             <h1 id="settings-heading">Settings</h1>
@@ -70,9 +70,9 @@ export class App {
         </main>
         <footer class="status-footer">
           <div class="version">${GAME_NAME} v${GAME_VERSION} by WoodyPython</div>
-          <div class="goal-track" role="progressbar" aria-label="Lifetime currency goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="goal-track" role="progressbar" aria-label="Progression goal" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div class="goal-fill" data-goal-fill></div>
-            <div class="goal-copy" data-goal-text>Earn 100 lifetime currency — 0 / 100 (0%)</div>
+            <div class="goal-copy" data-goal-text>Earn 10 lifetime Points — 0 / 10 (0%)</div>
           </div>
         </footer>
         <div class="visually-hidden" aria-live="polite" aria-atomic="true" data-live></div>
@@ -80,11 +80,22 @@ export class App {
     `
 
     const canvas = this.requireElement<HTMLCanvasElement>('.lock-canvas')
-    this.currencyValue = this.requireElement('[data-readout="currency"]')
+    this.pointsValue = this.requireElement('[data-readout="points"]')
     this.goalText = this.requireElement('[data-goal-text]')
     this.goalFill = this.requireElement('[data-goal-fill]')
     this.liveRegion = this.requireElement('[data-live]')
-    this.requireElement('[data-upgrades]').append(createUpgradesView())
+    this.upgradesView = new UpgradesView((upgradeId) => {
+      const result = this.simulation.purchase(upgradeId)
+      if (result.kind === 'purchased') {
+        this.liveRegion.textContent = `Upgrade purchased for ${formatDecimal(result.cost)} Points.`
+      } else if (result.kind === 'unaffordable') {
+        this.liveRegion.textContent = 'Not enough Points for that upgrade.'
+      }
+      this.lastUiSignature = ''
+      this.render(performance.now())
+      return result
+    })
+    this.requireElement('[data-upgrades]').append(this.upgradesView.element)
     this.renderThemeChoices()
 
     this.renderer = new LockRenderer(canvas)
@@ -92,9 +103,15 @@ export class App {
     this.loop = new GameLoop(
       (deltaSeconds, now) => {
         const result = this.simulation.tick(deltaSeconds, now)
-        if (result !== null) {
+        if (result?.kind === 'passed-target') {
           this.renderer.showEffect('miss', now)
-          this.liveRegion.textContent = `Target passed after ${result.state.hits} successful hits. Five second cooldown started.`
+          const seconds = Math.round((result.state.cooldownEndsAt - now) / 1_000)
+          this.liveRegion.textContent = `Target passed after ${result.state.hits} successful hits. ${seconds} second cooldown started.`
+        } else if (result?.kind === 'forgiven-miss') {
+          this.renderer.showEffect('forgiven', now)
+          this.liveRegion.textContent = 'Miss forgiven. The consecutive multiplier was reset.'
+        } else if (result?.kind === 'invulnerable') {
+          this.liveRegion.textContent = 'Second Chance invulnerability prevented another miss.'
         }
       },
       (now) => {
@@ -117,17 +134,27 @@ export class App {
     const hitAngle = beforeActivation.kind === 'active' ? beforeActivation.targetAngle : null
     const result = this.simulation.activate(now)
     if (result.kind === 'started') {
-      this.liveRegion.textContent = 'Run started. Zero of twenty targets hit.'
+      this.liveRegion.textContent = `Run started. Zero of ${result.state.requiredHits} targets hit.`
     } else if (result.kind === 'hit') {
-      this.renderer.showEffect('hit', now)
-      if (hitAngle !== null) this.renderer.showGain(hitAngle, result.reward, now)
+      this.renderer.showEffect(result.critical ? 'critical' : 'hit', now)
+      if (hitAngle !== null) this.renderer.showGain(hitAngle, result.reward, result.critical, now)
+      if (result.critical)
+        this.liveRegion.textContent = `Critical hit. ${formatDecimal(result.reward)} Points earned.`
+    } else if (result.kind === 'forgiven-miss') {
+      this.renderer.showEffect('forgiven', now)
+      this.liveRegion.textContent = 'Miss forgiven. The consecutive multiplier was reset.'
+    } else if (result.kind === 'invulnerable') {
+      this.liveRegion.textContent = 'Second Chance invulnerability blocked the input.'
     } else if (result.kind === 'miss') {
       this.renderer.showEffect('miss', now)
-      this.liveRegion.textContent = `Run failed after ${result.state.hits} successful hits. Five second cooldown started.`
+      const seconds = Math.round((result.state.cooldownEndsAt - now) / 1_000)
+      this.liveRegion.textContent = `Run failed after ${result.state.hits} successful hits. ${seconds} second cooldown started.`
     } else if (result.kind === 'completed') {
       this.renderer.showEffect('completed', now)
-      if (hitAngle !== null) this.renderer.showGain(hitAngle, TARGET_REWARD, now)
-      this.liveRegion.textContent = 'Run complete. Twenty-five currency earned.'
+      if (hitAngle !== null) {
+        this.renderer.showGain(hitAngle, result.targetReward, result.critical, now)
+      }
+      this.liveRegion.textContent = `Run complete. ${formatDecimal(result.reward)} Points earned.`
     }
     this.render(now)
   }
@@ -136,12 +163,12 @@ export class App {
     const snapshot = this.simulation.getSnapshot()
     this.renderer.render(snapshot, now)
 
-    const readout = formatDecimal(snapshot.currency)
-    if (readout !== this.lastReadout) {
-      this.currencyValue.textContent = readout
-      this.updateGoal(snapshot.lifetimeCurrency)
-      this.lastReadout = readout
-    }
+    const signature = this.uiSignature(snapshot)
+    if (signature === this.lastUiSignature) return
+    this.pointsValue.textContent = formatDecimal(snapshot.points)
+    this.updateGoal(snapshot)
+    this.upgradesView.update(snapshot)
+    this.lastUiSignature = signature
   }
 
   private renderThemeChoices(): void {
@@ -174,14 +201,24 @@ export class App {
     this.liveRegion.textContent = `${selectedTheme?.name ?? 'Selected'} theme applied.`
   }
 
-  private updateGoal(lifetimeCurrency: Decimal): void {
-    const requirement = new Decimal(GOAL_REQUIREMENT)
-    const progress = decimalProgress(lifetimeCurrency, requirement)
+  private updateGoal(snapshot: GameSnapshot): void {
+    const goal = currentGoal(snapshot)
+    const progress = decimalProgress(goal.current, goal.requirement)
     const percent = progress * 100
-    this.goalText.textContent = `Earn 100 lifetime currency — ${formatDecimal(lifetimeCurrency)} / 100 (${percent.toFixed(1)}%)`
+    this.goalText.textContent = goal.showNumbers
+      ? `${goal.label} — ${formatDecimal(goal.current)} / ${formatDecimal(goal.requirement)} (${percent.toFixed(1)}%)`
+      : goal.label
     this.goalFill.style.width = `${percent}%`
     const track = this.requireElement('.goal-track')
     track.setAttribute('aria-valuenow', percent.toFixed(1))
+  }
+
+  private uiSignature(snapshot: GameSnapshot): string {
+    const runStats =
+      snapshot.run.kind === 'active'
+        ? `${snapshot.run.consecutiveHits}:${snapshot.run.missesRemaining}`
+        : snapshot.run.kind
+    return `${snapshot.points.toString()}:${snapshot.lifetimePoints.toString()}:${Object.values(snapshot.upgrades).join(',')}:${runStats}`
   }
 
   private selectTab(selected: TabId): void {

@@ -4,9 +4,19 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await page.goto('/')
 
   await expect(page.getByText('Lock Incremental v0.1.0 by WoodyPython')).toBeVisible()
+  await expect(page.getByText('Points', { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /Lock game/ })).toBeVisible()
-  await expect(page.getByText('Repeatable Upgrades')).toBeHidden()
+  await expect(page.getByText('Repeatable Upgrades')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Target Value' })).toBeVisible()
+  const targetValue = page.getByRole('button', { name: /Target Value/ })
+  await expect(targetValue).toBeDisabled()
+  await expect(targetValue).toHaveText('5 Points')
+  await expect(page.locator('[data-upgrade-id="target-value"]')).toContainText('Total: 1×')
+  await expect(page.locator('[data-upgrade-id="target-value"]')).not.toHaveClass(/is-purchased/)
+  await expect(page.getByRole('complementary', { name: 'Game statistics' })).toHaveCount(0)
   await expect(page.getByText('One-time Upgrades')).toBeHidden()
+  await expect(page.getByText(/Earn 10 lifetime Points/)).toBeVisible()
+  await expect(page.locator('.status-footer')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
 
   await page.getByRole('button', { name: 'Settings' }).click()
   await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
@@ -31,7 +41,7 @@ test('supports keyboard start, failure, cooldown, and deliberate restart', async
 
   await page.keyboard.press('Space')
   await expect(live).toContainText('Run failed')
-  await expect(live).toContainText('Five second cooldown')
+  await expect(live).toContainText('5 second cooldown')
 
   await page.keyboard.press('Enter')
   await expect(live).toContainText('Run failed')
@@ -59,6 +69,17 @@ test('supports primary pointer input and fits the viewport', async ({ page }) =>
   })
   await expect(live).toContainText('Run started')
   await expect(lock).not.toBeFocused()
+})
+
+test('keeps the lock and upgrades fluid at mobile width', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.goto('/')
+  const lock = page.getByRole('button', { name: /Lock game/ })
+  const lockBox = await lock.boundingBox()
+  expect(lockBox).not.toBeNull()
+  if (lockBox === null) throw new Error('Expected lock')
+  expect(lockBox.x + lockBox.width).toBeLessThanOrEqual(321)
+  await expect(page.getByRole('heading', { name: 'Target Value' })).toBeVisible()
 })
 
 test('fails automatically when the bar passes an untouched target', async ({ page }) => {
