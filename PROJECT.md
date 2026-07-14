@@ -1,0 +1,261 @@
+# PROJECT.md
+
+## 1. Project Summary
+
+**Working title:** Lock Incremental
+
+Lock Incremental is a static browser incremental game built around an active circular timing challenge inspired by the arcade game Pop the Lock. The player starts a run, taps when a rotating marker reaches a target on the lock, and continues through a sequence of targets. Each successful hit reverses rotation and places the next target. A mistimed input ends the run. The initial run length is 20 successful hits.
+
+Completed runs award a primary currency that will support incremental progression, upgrades, higher goals, and longer-term systems. The first release should focus on a polished core loop and a reliable save system rather than a large amount of content.
+
+## 2. Product Principles
+
+- **Active-first:** Progress comes from playing the timing game, not passive offline generation.
+- **Immediate clarity:** The player should understand the next input and current objective without a tutorial wall.
+- **Incremental readability:** Resources, goals, upgrades, and settings should use familiar incremental-game patterns.
+- **Simple presentation:** Flat UI, vibrant colors, concise labels, and minimal ornamentation.
+- **Expandable architecture:** The initial implementation is small, but progression systems and tabs should be easy to extend.
+- **Local ownership:** Players can export, import, and download their saves.
+
+## 3. Core Gameplay Loop
+
+### Idle
+
+The lock marker spins continuously as a visual attract state. The player clicks or taps the lock to begin. The starting interaction begins the run but does not count as a scoring input.
+
+### Run
+
+1. The run begins with a target on the lock ring.
+2. The marker rotates toward and past the target.
+3. The player clicks, taps, or presses Space when marker and target overlap.
+4. On success, progress increases by one.
+5. The target relocates and rotation reverses.
+6. On a miss, the run ends without completion rewards.
+7. At 20 successful hits, the run completes and awards currency.
+
+The exact movement speed, hit-window size, target placement constraints, and reward formula are balance data and should not be embedded in rendering code.
+
+### Failure
+
+Failure should feel immediate but not punitive. Show a short red failure animation, report the achieved hit count, and return the lock to an obvious restartable state.
+
+### Completion
+
+Completion awards the calculated reward once, updates lifetime progress, shows a short success animation, and advances any completed goals.
+
+## 4. Initial Scope
+
+### Required for the first playable release
+
+- Main and Settings tabs
+- Canvas-rendered circular lock game
+- Idle, active, failed, and completed run states
+- Initial run requirement of 20 hits
+- Mouse, touch, Space, and Enter controls
+- Primary currency and lifetime total
+- At least one basic upgrade or progression hook, even if early balancing is provisional
+- Goal progress bar and version label at the bottom
+- Manual save
+- Autosave with selectable interval
+- Export to clipboard
+- Export as file
+- Import from text
+- Import from file
+- Wipe save with two-step confirmation
+- Optional tab-notification setting and reusable red tab highlight
+- Responsive desktop and mobile layout
+- Save schema versioning and migration infrastructure
+
+### Explicitly excluded from the first release
+
+- Offline progression or offline rewards
+- Accounts
+- Cloud synchronization
+- Online leaderboards
+- Multiplayer
+- Backend services
+- Discord and support buttons
+- Multiple themes
+- Mobile native application packaging
+
+## 5. Suggested Technology Stack
+
+### Application
+
+- **Vite** as the development server and production build tool
+- **Vanilla TypeScript** for game logic and UI behavior
+- **HTML** for semantic application structure
+- **CSS** for layout, responsive styling, animation, and the single theme
+- **Canvas 2D API** for the lock and gameplay effects
+
+A component framework is intentionally omitted. The project has a small number of screens, and its central interaction is a custom animation loop rather than a large data-driven application UI.
+
+### Big numbers
+
+Use **`break_infinity.js`** for currency, costs, rewards, lifetime totals, goal thresholds, and future incremental values. It is designed for incremental games that need values beyond JavaScript's ordinary numeric range and favors speed over high-precision arithmetic.
+
+Use native numbers for frame timing, geometry, angles, and bounded integer counters.
+
+### Persistence
+
+Use browser **`localStorage`**, not cookies.
+
+Reasons:
+
+- Saves remain available across browser sessions.
+- No backend is required.
+- JSON data can be loaded and written directly.
+- Cookies would be smaller, would be sent with HTTP requests where applicable, and are not intended as a game-save store.
+
+The save must include a schema version and serialize `Decimal` values as strings. Provide file and clipboard export because local storage is tied to the current browser profile and origin.
+
+Offline time may be recorded as metadata, but it must not produce rewards in the initial game.
+
+### Testing and quality
+
+- **Vitest** for unit tests
+- Optional browser automation such as **Playwright** once end-to-end coverage is warranted
+- ESLint and a formatter such as Prettier
+- Strict TypeScript checks
+
+### Hosting
+
+Host the compiled static site on **GitHub Pages**.
+
+Recommended deployment:
+
+- Store source in a GitHub repository.
+- Run validation and `vite build` in GitHub Actions.
+- Upload the generated `dist/` directory as the Pages artifact.
+- Configure Vite's `base` path correctly for either a repository subpath or a root `username.github.io` site.
+
+GitHub Pages is sufficient because the initial game requires only static files and client-side storage. Any later cloud saves, secure accounts, or trusted leaderboards would require an external backend.
+
+## 6. Save Model
+
+The save should contain:
+
+- Schema version
+- Save timestamp
+- Primary currency
+- Lifetime currency or equivalent lifetime progression
+- Upgrade levels
+- Goal progression or data needed to derive it
+- Statistics such as attempts, successes, best partial run, and completed runs
+- User settings
+
+Do not serialize transient state such as:
+
+- Current animation frame
+- Active pointer state
+- Temporary particles
+- Open confirmation dialogs
+- A partially active run, unless a later design intentionally supports run restoration
+
+On load, default to idle. This avoids ambiguous scoring after a refresh.
+
+## 7. Progression Direction
+
+The initial economy should be simple:
+
+- Completing a run grants the primary currency.
+- Performance may influence rewards later, but the first formula should be understandable.
+- Upgrades may alter reward, marker speed, target tolerance, run length, or unlock new mechanics.
+- Avoid upgrades that trivialize the timing mechanic too early.
+- Goals provide clear medium-term objectives and determine the bottom progress bar.
+
+All economy values must be data-driven and use `Decimal` where growth can become large.
+
+Potential future systems, not required initially:
+
+- Prestige or reset layer
+- Multiple lock tiers
+- Challenge modifiers
+- Combo or streak rewards
+- Unlockable gameplay variations
+- Additional tabs triggered by progression
+
+## 8. UI Summary
+
+### Top
+
+Persistent tab navigation with Main and Settings. The active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
+
+### Center
+
+The Main tab focuses on the circular lock. Resource readouts and run information remain compact and secondary to the timing interaction.
+
+The Settings tab contains save/import/export controls, autosave controls, and tab-notification controls. It does not contain offline-progress, Discord, or support controls.
+
+### Bottom
+
+A persistent version label and progress bar show progress toward the next configured goal.
+
+See `DESIGN.md` for complete visual and behavioral requirements.
+
+## 9. Proposed Commands
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  }
+}
+```
+
+Exact commands may change with the chosen TypeScript configuration, but equivalent checks must remain available.
+
+## 10. Suggested Milestones
+
+### Milestone 1: Core prototype
+
+- Vite and TypeScript setup
+- Canvas resize and render loop
+- Idle spinning marker
+- Run state machine
+- Target placement, hit detection, reversal, miss, and 20-hit completion
+
+### Milestone 2: Application shell
+
+- Main and Settings tabs
+- Theme and responsive layout
+- Resource readouts
+- Footer version and first goal progress bar
+- Success, failure, and notification effects
+
+### Milestone 3: Persistence
+
+- Versioned save model
+- Manual save and autosave
+- Import/export flows
+- Wipe confirmation
+- Validation and migration tests
+
+### Milestone 4: Incremental progression
+
+- Completion rewards
+- Lifetime statistics
+- Initial upgrades
+- Goal sequence
+- Big-number formatting through `break_infinity.js`
+
+### Milestone 5: Release hardening
+
+- Accessibility pass
+- Mobile input and layout testing
+- Reduced-motion behavior
+- Performance checks
+- GitHub Actions validation
+- GitHub Pages deployment
+
+## 11. Definition of Initial Success
+
+The initial release is successful when a new player can open the static site, understand how to start, complete or fail a responsive 20-hit timing run, earn visible progress, safely save or transfer that progress, and return later in the same browser without data loss. The game should feel coherent and expandable even before deep progression systems are added.
