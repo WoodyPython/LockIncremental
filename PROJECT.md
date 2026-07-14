@@ -161,10 +161,10 @@ On load, default to idle. This avoids ambiguous scoring after a refresh.
 The initial economy is based on one Point per successful target and a completion bonus equal to 25% of the run's accumulated pre-critical target value. Base upgrades are:
 
 - Repeatable Target Value levels cost `5 × 1.5^level`, rounded to the nearest integer, and add 25% target value per level.
-- At 10 lifetime Points, reveal one-time upgrades for 1.05× consecutive-target scaling (20), one forgiven miss per run (25), Critical Hits (50), a three-second failure cooldown (100), and 20% lower per-hit speed scaling (150).
+- On completion of the first progression goal (100 lifetime Points), reveal all one-time upgrades together: 1.05× consecutive-target scaling (50), Critical Hits (100), a three-second failure cooldown (150), 20% lower per-hit speed scaling (150), 2× all Point gains (250), and one forgiven miss per run (500). Feature unlocks reference goal IDs rather than duplicating numeric thresholds.
 - Critical Hits begin at 2% chance and award 5× target Points. Repeatable critical-chance levels cost `25 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
 - A forgiven miss awards no Points, does not advance successful-hit progress, resets the consecutive multiplier, relocates the target, reverses direction, and grants 200ms of input/pass invulnerability.
-- Goals first track 10 lifetime Points and then ownership of the Critical Hits upgrade.
+- Goals first track 100 lifetime Points and then 1,000 lifetime Points.
 
 All economy values must be data-driven and use `Decimal` where growth can become large.
 
@@ -181,11 +181,11 @@ Potential future systems, not required initially:
 
 ### Top
 
-Points appear at the top above a bounded separator. Centered persistent tab navigation with Main and Settings sits below the separator without a surrounding navigation bar, and the active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
+Centered persistent tab navigation with Main and Settings appears at the top without a surrounding navigation bar, and the active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
 
 ### Center
 
-The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center, while Points appear above the navigation separator. Upgrades sit directly below the lock and fade in as progression unlocks them. One-time upgrades retain purchased cards and reveal only the next three unpurchased choices.
+The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center. Points appear below the lock and immediately above a horizontal divider and the upgrade cards. Upgrades fade in only once when their progression goal is first reached. Purchased one-time cards remain visible with their completed state. Cards are initially placed in increasing base-cost order and never reorder during play.
 
 The Settings tab contains save/import/export controls, autosave controls, and tab-notification controls. It does not contain offline-progress, Discord, or support controls.
 

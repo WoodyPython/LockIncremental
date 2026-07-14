@@ -45,7 +45,7 @@ The application should fill the viewport without causing routine page scrolling 
 
 Persistent tabs appear centered at the top of every screen without a full-width containing bar.
 
-Reserve a small amount of space above the header, show Points first, then draw a separator matching the bottom progress bar's horizontal bounds. Place wide, compact-height tabs below the separator. Do not repeat the game title in this top area.
+Reserve a small amount of space above the header and place wide, compact-height tabs beneath it. Do not repeat the game title in this top area.
 
 ### Initial tabs
 
@@ -82,12 +82,12 @@ Desktop:
 
 - A centered lock game occupies the primary visual area.
 - Current run score appears in the center of the lock.
-- Points appear in the top status area above the navigation separator.
+- Points appear below the lock and above the upgrades divider.
 - Upgrade sections remain hidden until progression unlocks them.
 
 Mobile:
 
-- Points remain in the top status area.
+- Points remain directly above the upgrades divider.
 - The lock scales to fit the width while remaining circular.
 - Controls remain large enough for touch input.
 
@@ -95,7 +95,7 @@ Mobile:
 
 At minimum, show:
 
-- Current Points above the navigation separator
+- Current Points below the lock and above a horizontal upgrades divider
 - Current run score and requirement centered inside the lock, such as `7 / 50`
 - A large `Click to Play` idle/restart prompt
 
@@ -201,12 +201,12 @@ On completing all 50 hits:
 ### Points and upgrades
 
 - Each target begins at a base value of 1 Point. Repeatable Target Value levels add 25% and cost `5 × 1.5^level` Points, rounded to the nearest integer.
-- At 10 lifetime Points, fade in one-time upgrades for consecutive value (20), one forgiven miss (25), Critical Hits (50), a three-second failure cooldown (100), and 20% lower speed scaling (150).
+- On completion of the first progression goal (100 lifetime Points), fade in all one-time upgrades together: consecutive value (50), Critical Hits (100), a three-second failure cooldown (150), 20% lower speed scaling (150), 2× all Point gains (250), and one forgiven miss (500). Feature visibility should reference goal IDs rather than duplicate numeric thresholds.
 - Consecutive value begins at 1× on the first target and scales subsequent uninterrupted targets by 1.05×. A forgiven miss skips the target without Points or hit progress, resets the streak, reverses direction, and consumes the run's allowance.
 - Critical Hits begin at 2% chance and grant 5× target Points. Critical-chance levels add 0.5 percentage points, cost `25 × 1.5^level` rounded to the nearest integer, and cap at 100%.
 - The completion bonus is 25% of the run's accumulated pre-critical target values, so critical hits do not multiply it.
 - Place upgrade cards directly below the lock without a surrounding section panel. Separate repeatable and one-time sections with a horizontal divider.
-- Preserve purchased one-time cards with a green success outline and reveal only the next three unpurchased one-time upgrades. Repeatable cards do not receive a purchased outline and instead show their cumulative result. Newly revealed cards must enter the layout without reserved empty slots.
+- Preserve purchased one-time cards with a green success outline and show every one-time upgrade once the section unlocks. Place cards in increasing base-cost order when the view is created, then keep that order fixed even as repeatable costs change. Repeatable cards remain visible and show their cumulative result. The fade-in occurs only once when the required goal is reached and must not restart after purchases, hits, or tab changes.
 - When Second Chance is consumed, use a light ocean-blue activation effect and grant 200ms of invulnerability. Ignore inputs during that window, and safely relocate a target if it is passed before protection expires.
 
 ### Animation timing
@@ -291,7 +291,7 @@ Keep the version in one source of truth and inject or import it where displayed.
 
 ### Goal progress bar
 
-Show progress first toward 10 lifetime Points, then toward purchasing Critical Hits. Keep the Critical Hits goal complete until a later goal is configured.
+Show progress first toward 100 lifetime Points, then toward 1,000 lifetime Points. Keep the 1,000-Point goal complete until a later goal is configured.
 
 Required content:
 

@@ -33,6 +33,7 @@ describe('GameSimulation progression', () => {
     expect(snapshot.points.eq(REQUIRED_HITS * 1.25)).toBe(true)
     expect(snapshot.lifetimePoints.eq(REQUIRED_HITS * 1.25)).toBe(true)
     expect(game.activate(300_000).reward.eq(0)).toBe(true)
+    expect(game.getSnapshot().points.eq(snapshot.points)).toBe(true)
   })
 
   it('applies target value, streak rewards, and a non-bonus critical multiplier', () => {
@@ -52,6 +53,22 @@ describe('GameSimulation progression', () => {
     expect(first.reward.eq(6.25)).toBe(true)
     const second = hitCurrentTarget(game, 10_000)
     expect(second.reward.eq(6.5625)).toBe(true)
+  })
+
+  it('doubles target, critical, and completion Point gains', () => {
+    const game = new GameSimulation({
+      targetRandom: () => 0,
+      criticalRandom: () => 0,
+      initialPoints: 350,
+    })
+    expect(game.purchase('critical-hits').kind).toBe('purchased')
+    expect(game.purchase('double-points').kind).toBe('purchased')
+    expect(game.getSnapshot().points.eq(0)).toBe(true)
+    expect(game.activate(0).kind).toBe('started')
+    for (let target = 0; target < REQUIRED_HITS; target += 1) {
+      hitCurrentTarget(game, target * 10_000)
+    }
+    expect(game.getSnapshot().points.eq(REQUIRED_HITS * 10.5)).toBe(true)
   })
 
   it('uses an independent critical roll and reports automatic target failure', () => {

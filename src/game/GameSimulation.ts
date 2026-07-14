@@ -11,18 +11,16 @@ import {
 } from './RunState'
 import {
   EMPTY_UPGRADE_LEVELS,
-  UPGRADE_DEFINITIONS,
+  CRITICAL_REWARD_MULTIPLIER,
   consecutiveMultiplier,
   criticalChance,
-  isUpgradeVisible,
+  pointGainMultiplier,
+  quoteUpgrade,
+  runModifiersForUpgrades,
   targetValueMultiplier,
-  upgradeCost,
   type UpgradeId,
   type UpgradeLevels,
 } from './upgrades'
-
-const CRITICAL_MULTIPLIER = new Decimal(5)
-const MAX_CRITICAL_CHANCE_LEVEL = 196
 
 export interface GameSnapshot {
   readonly run: RunState
@@ -128,25 +126,19 @@ export class GameSimulation {
   }
 
   public purchase(upgradeId: UpgradeId): PurchaseResult {
-    const definition = UPGRADE_DEFINITIONS.find((candidate) => candidate.id === upgradeId)
-    if (definition === undefined) return { kind: 'hidden', upgradeId }
     const snapshotLevels = this.snapshotLevels()
-    if (!isUpgradeVisible(definition, snapshotLevels, this.totalPoints)) {
-      return { kind: 'hidden', upgradeId }
-    }
-    const level = this.upgradeLevels[upgradeId]
-    if (definition.kind === 'one-time' && level > 0) return { kind: 'owned', upgradeId }
-    if (upgradeId === 'critical-chance' && level >= MAX_CRITICAL_CHANCE_LEVEL) {
-      return { kind: 'maxed', upgradeId }
-    }
-    const cost = upgradeCost(definition, level)
-    if (this.currentPoints.lt(cost)) return { kind: 'unaffordable', upgradeId }
-    this.currentPoints = this.currentPoints.minus(cost)
-    this.upgradeLevels[upgradeId] = level + 1
+    const quote = quoteUpgrade(upgradeId, snapshotLevels, this.totalPoints, this.currentPoints)
+    if (quote.status !== 'available') return { kind: quote.status, upgradeId }
+    this.currentPoints = this.currentPoints.minus(quote.cost)
+    this.upgradeLevels[upgradeId] = quote.level + 1
     if (upgradeId === 'miss-allowance' && this.runState.kind === 'active') {
       this.runState = { ...this.runState, missesRemaining: 1 }
     }
-    return { kind: 'purchased', upgradeId, cost }
+    return { kind: 'purchased', upgradeId, cost: quote.cost }
+  }
+
+  public getRunState(): RunState {
+    return this.runState
   }
 
   public getSnapshot(): GameSnapshot {
@@ -168,7 +160,9 @@ export class GameSimulation {
     }
     const chance = criticalChance(this.snapshotLevels())
     const critical = chance > 0 && this.criticalRandom() < chance
-    const targetReward = critical ? targetBasePoints.times(CRITICAL_MULTIPLIER) : targetBasePoints
+    const targetReward = critical
+      ? targetBasePoints.times(CRITICAL_REWARD_MULTIPLIER)
+      : targetBasePoints
     const completionBonus =
       transition.kind === 'completed' ? transition.state.completionBonus : new Decimal(0)
     const reward = targetReward.plus(completionBonus)
@@ -183,17 +177,13 @@ export class GameSimulation {
   private nextTargetBasePoints(): Decimal {
     const levels = this.snapshotLevels()
     const consecutiveHits = this.runState.kind === 'active' ? this.runState.consecutiveHits : 0
-    return targetValueMultiplier(levels['target-value']).times(
-      consecutiveMultiplier(consecutiveHits, levels['consecutive-value'] > 0),
-    )
+    return targetValueMultiplier(levels['target-value'])
+      .times(consecutiveMultiplier(consecutiveHits, levels['consecutive-value'] > 0))
+      .times(pointGainMultiplier(levels))
   }
 
   private runModifiers(): RunModifiers {
-    return {
-      missesPerRun: this.upgradeLevels['miss-allowance'] > 0 ? 1 : 0,
-      failureCooldownMs: this.upgradeLevels['fail-cooldown'] > 0 ? 3_000 : 5_000,
-      speedScalingMultiplier: this.upgradeLevels['speed-scaling'] > 0 ? 0.8 : 1,
-    }
+    return runModifiersForUpgrades(this.upgradeLevels)
   }
 
   private snapshotLevels(): UpgradeLevels {

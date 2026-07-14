@@ -17,4 +17,9 @@ export const THEMES: readonly ThemeDefinition[] = [
 
 export function applyTheme(theme: ThemeId): void {
   document.documentElement.dataset.theme = theme
+  const themeColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-bg')
+    .trim()
+  const metadata = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (metadata !== null && themeColor !== '') metadata.content = themeColor
 }

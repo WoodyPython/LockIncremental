@@ -1,7 +1,6 @@
 import Decimal from 'break_infinity.js'
-import type { GameSnapshot } from '../game/GameSimulation'
-import { TARGET_HALF_WIDTH_RADIANS } from '../game/constants'
-import { cooldownRemainingMs } from '../game/RunState'
+import { COMPLETION_CELEBRATION_MS, TARGET_HALF_WIDTH_RADIANS } from '../game/constants'
+import { cooldownRemainingMs, type RunState } from '../game/RunState'
 import { formatDecimal } from '../utils/format'
 
 export type LockEffect = 'hit' | 'critical' | 'forgiven' | 'miss' | 'completed' | null
@@ -21,24 +20,45 @@ interface Palette {
   readonly shield: string
 }
 
-interface GainEffect {
+interface FloatingTextBase {
   readonly angle: number
-  readonly amount: Decimal
-  readonly critical: boolean
   readonly startedAt: number
 }
+
+type FloatingTextEffect =
+  | (FloatingTextBase & {
+      readonly kind: 'gain'
+      readonly amount: Decimal
+      readonly critical: boolean
+    })
+  | (FloatingTextBase & { readonly kind: 'shielded' })
+
+const EFFECT_LIFETIME_MS = 450
+const GAIN_LIFETIME_MS = 1_200
+const MISS_SHAKE_MS = 280
+const HIT_PULSE_MS = 250
+const MAX_FLOATING_TEXT_EFFECTS = 12
 
 export class LockRenderer {
   private readonly context: CanvasRenderingContext2D
   private effect: LockEffect = null
   private effectStartedAt = 0
-  private gains: GainEffect[] = []
+  private floatingTextEffects: FloatingTextEffect[] = []
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  private readonly resizeObserver: ResizeObserver
+  private palette: Palette | null = null
+  private sizeDirty = true
+  private cssSize = 1
+  private pixelRatio = 1
 
   public constructor(private readonly canvas: HTMLCanvasElement) {
     const context = canvas.getContext('2d')
     if (context === null) throw new Error('Canvas 2D is not supported by this browser.')
     this.context = context
+    this.resizeObserver = new ResizeObserver(() => {
+      this.sizeDirty = true
+    })
+    this.resizeObserver.observe(canvas)
   }
 
   public showEffect(effect: Exclude<LockEffect, null>, now: number): void {
@@ -47,64 +67,97 @@ export class LockRenderer {
   }
 
   public showGain(angle: number, amount: Decimal, critical: boolean, now: number): void {
-    this.gains.push({ angle, amount: new Decimal(amount), critical, startedAt: now })
+    this.addFloatingText({
+      kind: 'gain',
+      angle,
+      amount: new Decimal(amount),
+      critical,
+      startedAt: now,
+    })
   }
 
-  public render(snapshot: GameSnapshot, now: number): void {
+  public showShield(angle: number, now: number): void {
+    this.addFloatingText({ kind: 'shielded', angle, startedAt: now })
+  }
+
+  public invalidatePalette(): void {
+    this.palette = null
+  }
+
+  public destroy(): void {
+    this.resizeObserver.disconnect()
+    this.floatingTextEffects.length = 0
+    this.effect = null
+  }
+
+  public render(run: RunState, now: number): void {
     const size = this.resizeCanvas()
-    const palette = this.readPalette()
+    const palette = this.palette ?? (this.palette = this.readPalette())
     const { context } = this
     const center = size / 2
     const radius = size * 0.36
     const ringWidth = Math.max(8, size * 0.03)
     const effectAge = now - this.effectStartedAt
-    if (effectAge > 450) this.effect = null
-    this.gains = this.gains.filter((gain) => now - gain.startedAt <= 1_200)
+    if (effectAge > EFFECT_LIFETIME_MS) this.effect = null
+    for (let index = this.floatingTextEffects.length - 1; index >= 0; index -= 1) {
+      const floatingText = this.floatingTextEffects[index]
+      if (floatingText !== undefined && now - floatingText.startedAt > GAIN_LIFETIME_MS) {
+        this.floatingTextEffects.splice(index, 1)
+      }
+    }
 
     context.clearRect(0, 0, size, size)
     context.fillStyle = palette.background
     context.fillRect(0, 0, size, size)
 
     const shake =
-      this.effect === 'miss' && !this.reduceMotion.matches && effectAge < 280
-        ? Math.sin(effectAge * 0.12) * (1 - effectAge / 280) * 7
+      this.effect === 'miss' && !this.reduceMotion.matches && effectAge < MISS_SHAKE_MS
+        ? Math.sin(effectAge * 0.12) * (1 - effectAge / MISS_SHAKE_MS) * 7
         : 0
     context.save()
     context.translate(shake, 0)
 
     context.lineWidth = ringWidth
-    context.strokeStyle = this.ringColor(snapshot, palette)
+    context.strokeStyle = this.ringColor(run, palette)
     context.beginPath()
     context.arc(center, center, radius, 0, Math.PI * 2)
     context.stroke()
 
-    if (snapshot.run.kind === 'active' || snapshot.run.kind === 'failed') {
-      this.drawTarget(snapshot.run.targetAngle, center, radius, ringWidth, palette)
+    if (run.kind === 'active' || run.kind === 'failed') {
+      this.drawTarget(run.targetAngle, center, radius, ringWidth, palette)
     }
 
-    this.drawBar(snapshot.run.markerAngle, center, radius, palette)
-    this.drawCenterText(snapshot, now, center, size, palette)
+    this.drawBar(run.markerAngle, center, radius, palette)
+    this.drawCenterText(run, now, center, size, palette)
     this.drawPulse(center, radius, effectAge, palette)
-    if (snapshot.run.kind === 'completed') {
-      this.drawWinCelebration(snapshot.run.completedAt, now, center, radius, palette)
+    if (run.kind === 'completed') {
+      this.drawWinCelebration(run.completedAt, now, center, radius, palette)
     }
-    for (const gain of this.gains) this.drawGain(gain, now, center, radius, size, palette)
+    for (const floatingText of this.floatingTextEffects) {
+      this.drawFloatingText(floatingText, now, center, radius, size, palette)
+    }
     context.restore()
   }
 
   private resizeCanvas(): number {
-    const cssSize = Math.max(
+    const nextPixelRatio = Math.max(1, window.devicePixelRatio || 1)
+    const ratioChanged = nextPixelRatio !== this.pixelRatio
+    if (ratioChanged) this.sizeDirty = true
+    if (!this.sizeDirty) return this.cssSize
+
+    this.cssSize = Math.max(
       1,
       Math.floor(Math.min(this.canvas.clientWidth, this.canvas.clientHeight)),
     )
-    const scale = Math.max(1, window.devicePixelRatio || 1)
-    const pixelSize = Math.floor(cssSize * scale)
+    this.pixelRatio = nextPixelRatio
+    const pixelSize = Math.floor(this.cssSize * this.pixelRatio)
     if (this.canvas.width !== pixelSize || this.canvas.height !== pixelSize) {
       this.canvas.width = pixelSize
       this.canvas.height = pixelSize
     }
-    this.context.setTransform(scale, 0, 0, scale, 0, 0)
-    return cssSize
+    this.context.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0)
+    this.sizeDirty = false
+    return this.cssSize
   }
 
   private drawBar(angle: number, center: number, radius: number, palette: Palette): void {
@@ -164,13 +217,12 @@ export class LockRenderer {
   }
 
   private drawCenterText(
-    snapshot: GameSnapshot,
+    run: RunState,
     now: number,
     center: number,
     size: number,
     palette: Palette,
   ): void {
-    const run = snapshot.run
     let heading: string
     let color = palette.text
     if (run.kind === 'active') {
@@ -214,7 +266,7 @@ export class LockRenderer {
     radius: number,
     palette: Palette,
   ): void {
-    const progress = Math.min(1, Math.max(0, (now - completedAt) / 1_500))
+    const progress = Math.min(1, Math.max(0, (now - completedAt) / COMPLETION_CELEBRATION_MS))
     if (this.reduceMotion.matches) return
 
     this.context.save()
@@ -238,25 +290,36 @@ export class LockRenderer {
     this.context.restore()
   }
 
-  private drawGain(
-    gain: GainEffect,
+  private addFloatingText(effect: FloatingTextEffect): void {
+    if (this.floatingTextEffects.length >= MAX_FLOATING_TEXT_EFFECTS) {
+      this.floatingTextEffects.shift()
+    }
+    this.floatingTextEffects.push(effect)
+  }
+
+  private drawFloatingText(
+    effect: FloatingTextEffect,
     now: number,
     center: number,
     radius: number,
     size: number,
     palette: Palette,
   ): void {
-    const progress = Math.min(1, (now - gain.startedAt) / 1_200)
+    const progress = Math.min(1, (now - effect.startedAt) / GAIN_LIFETIME_MS)
     const outwardOffset = size * (0.06 + (this.reduceMotion.matches ? 0 : progress * 0.055))
     const distance = radius + outwardOffset
-    const x = center + Math.cos(gain.angle) * distance
-    const y = center + Math.sin(gain.angle) * distance
+    const x = center + Math.cos(effect.angle) * distance
+    const y = center + Math.sin(effect.angle) * distance
     this.context.globalAlpha = 1 - progress
-    this.context.fillStyle = palette.success
+    this.context.fillStyle = effect.kind === 'shielded' ? palette.shield : palette.success
     this.context.font = `800 ${Math.max(16, size * 0.045)}px system-ui, sans-serif`
     this.context.textAlign = 'center'
     this.context.textBaseline = 'middle'
-    this.context.fillText(`${gain.critical ? 'CRIT ' : ''}+${formatDecimal(gain.amount)}`, x, y)
+    const label =
+      effect.kind === 'shielded'
+        ? 'Shielded!'
+        : `${effect.critical ? 'CRIT ' : ''}+${formatDecimal(effect.amount)}`
+    this.context.fillText(label, x, y)
     this.context.globalAlpha = 1
   }
 
@@ -270,7 +333,7 @@ export class LockRenderer {
     ) {
       return
     }
-    const duration = this.effect === 'completed' ? 450 : 250
+    const duration = this.effect === 'completed' ? EFFECT_LIFETIME_MS : HIT_PULSE_MS
     const progress = Math.min(1, effectAge / duration)
     this.context.globalAlpha = 1 - progress
     this.context.strokeStyle =
@@ -286,9 +349,9 @@ export class LockRenderer {
     this.context.globalAlpha = 1
   }
 
-  private ringColor(snapshot: GameSnapshot, palette: Palette): string {
-    if (snapshot.run.kind === 'failed') return palette.danger
-    if (snapshot.run.kind === 'completed') return palette.gold
+  private ringColor(run: RunState, palette: Palette): string {
+    if (run.kind === 'failed') return palette.danger
+    if (run.kind === 'completed') return palette.gold
     if (this.effect === 'hit') return palette.success
     if (this.effect === 'critical') return palette.gold
     if (this.effect === 'forgiven') return palette.shield
