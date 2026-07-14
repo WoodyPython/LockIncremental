@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { GameActivationResult, GameTickResult } from '../game/GameSimulation'
 import type { ActiveRunState, CompletedRunState, FailedRunState } from '../game/RunState'
+import { TARGET_HALF_WIDTH_RADIANS } from '../game/constants'
 import { presentActivation, presentTick } from './presentation'
 
 const active: ActiveRunState = {
   kind: 'active',
   markerAngle: 1,
   targetAngle: 1,
+  targetCritical: false,
+  targetHalfWidth: TARGET_HALF_WIDTH_RADIANS,
   direction: 1,
   hits: 2,
   consecutiveHits: 2,
@@ -22,6 +25,8 @@ const failed: FailedRunState = {
   kind: 'failed',
   markerAngle: 1,
   targetAngle: 2,
+  targetCritical: true,
+  targetHalfWidth: TARGET_HALF_WIDTH_RADIANS,
   hits: 2,
   requiredHits: 50,
   cooldownEndsAt: 6_000,
@@ -33,8 +38,9 @@ const completed: CompletedRunState = {
   hits: 50,
   requiredHits: 50,
   completedAt: 1_000,
-  celebrationEndsAt: 2_500,
+  celebrationEndsAt: 4_000,
   completionBonus: new Decimal(12.5),
+  medalsAwarded: new Decimal(1),
 }
 
 describe('game result presentation', () => {
@@ -73,10 +79,11 @@ describe('game result presentation', () => {
       reward: new Decimal(17.5),
       targetReward: new Decimal(5),
       completionBonus: new Decimal(12.5),
+      medalsAwarded: new Decimal(1),
       critical: true,
     }
     const presentation = presentActivation(result, 1_000, 2)
-    expect(presentation.announcement).toBe('Run complete. 17.5 Points earned.')
+    expect(presentation.announcement).toBe('Run complete. 17.5 Points and 1 Medal earned.')
     expect(presentation.effect).toBe('completed')
     expect(presentation.gain?.amount.eq(5)).toBe(true)
   })

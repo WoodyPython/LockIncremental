@@ -2,6 +2,14 @@ import Decimal from 'break_infinity.js'
 
 import { RESULT_COOLDOWN_MS } from './constants'
 import { FIRST_PROGRESSION_GOAL_ID } from './goals'
+import {
+  EMPTY_MEDAL_UPGRADE_LEVELS,
+  medalMissesPerRun,
+  medalRequiredHits,
+  medalTargetHalfWidth,
+  type MedalUpgradeId,
+  type MedalUpgradeLevels,
+} from './medalUpgrades'
 import { isUnlockRequirementMet, type UnlockRequirement } from './unlocks'
 
 export type UpgradeId =
@@ -13,6 +21,8 @@ export type UpgradeId =
   | 'speed-scaling'
   | 'double-points'
   | 'critical-chance'
+  | 'rapid-recovery'
+  | 'efficient-scaling'
 
 export type UpgradeKind = 'multi-buy' | 'one-time'
 
@@ -25,6 +35,7 @@ export interface UpgradeDefinition {
   readonly costScale?: Decimal
   readonly unlockRequirement?: UnlockRequirement
   readonly prerequisiteId?: UpgradeId
+  readonly medalPrerequisiteId?: MedalUpgradeId
 }
 
 export type UpgradeLevels = Readonly<Record<UpgradeId, number>>
@@ -47,6 +58,8 @@ export const EMPTY_UPGRADE_LEVELS: UpgradeLevels = {
   'speed-scaling': 0,
   'double-points': 0,
   'critical-chance': 0,
+  'rapid-recovery': 0,
+  'efficient-scaling': 0,
 }
 
 const ONE_TIME_UNLOCK: UnlockRequirement = {
@@ -64,6 +77,7 @@ export const MAX_CRITICAL_CHANCE_LEVEL = Math.round(
 export const MISSES_PER_RUN_UPGRADED = 1
 export const FAILURE_COOLDOWN_UPGRADED_MS = 3_000
 export const SPEED_SCALING_UPGRADED_MULTIPLIER = 0.8
+export const REPEATABLE_GROWTH_REDUCTION = 0.75
 
 export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
   {
@@ -71,15 +85,15 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'multi-buy',
     name: 'Target Value',
     description: 'Increase every target value by +25%.',
-    baseCost: new Decimal(5),
-    costScale: new Decimal(1.5),
+    baseCost: new Decimal(3),
+    costScale: new Decimal(1.4),
   },
   {
     id: 'consecutive-value',
     kind: 'one-time',
     name: 'Consecutive Value',
     description: 'Each consecutive target increases its value by 1.05×.',
-    baseCost: new Decimal(50),
+    baseCost: new Decimal(100),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
   {
@@ -87,7 +101,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'one-time',
     name: 'Second Chance',
     description: 'Miss one target per run without failing.',
-    baseCost: new Decimal(500),
+    baseCost: new Decimal(2500),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
   {
@@ -103,7 +117,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'one-time',
     name: 'Quick Recovery',
     description: 'Reduce the failure cooldown to 3 seconds.',
-    baseCost: new Decimal(150),
+    baseCost: new Decimal(250),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
   {
@@ -111,7 +125,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'one-time',
     name: 'Steady Hands',
     description: 'Reduce speed scaling per target by 20%.',
-    baseCost: new Decimal(150),
+    baseCost: new Decimal(1000),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
   {
@@ -119,7 +133,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'one-time',
     name: 'Double Points',
     description: 'Multiply all Point gains by 2×.',
-    baseCost: new Decimal(250),
+    baseCost: new Decimal(500),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
   {
@@ -127,24 +141,55 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     kind: 'multi-buy',
     name: 'Critical Chance',
     description: 'Increase critical chance by +0.5%.',
-    baseCost: new Decimal(25),
+    baseCost: new Decimal(20),
     costScale: new Decimal(1.5),
     prerequisiteId: 'critical-hits',
   },
+  {
+    id: 'rapid-recovery',
+    kind: 'one-time',
+    name: 'Rapid Recovery',
+    description: 'Halve the effective failure cooldown.',
+    baseCost: new Decimal(10_000),
+    medalPrerequisiteId: 'shorter-jackpot',
+  },
+  {
+    id: 'efficient-scaling',
+    kind: 'one-time',
+    name: 'Efficient Scaling',
+    description: 'Reduce repeatable upgrade cost scaling by 25%.',
+    baseCost: new Decimal(25_000),
+    medalPrerequisiteId: 'shorter-jackpot',
+  },
 ]
 
-export function upgradeCost(definition: UpgradeDefinition, level: number): Decimal {
+export function effectiveCostScale(definition: UpgradeDefinition, levels: UpgradeLevels): Decimal {
+  const base = definition.costScale ?? new Decimal(1)
+  if (levels['efficient-scaling'] === 0) return new Decimal(base)
+  return new Decimal(1).plus(base.minus(1).times(REPEATABLE_GROWTH_REDUCTION))
+}
+
+export function upgradeCost(
+  definition: UpgradeDefinition,
+  level: number,
+  levels: UpgradeLevels = EMPTY_UPGRADE_LEVELS,
+): Decimal {
   if (definition.kind === 'one-time') return new Decimal(definition.baseCost)
-  return definition.baseCost.times((definition.costScale ?? new Decimal(1)).pow(level)).round()
+  return definition.baseCost.times(effectiveCostScale(definition, levels).pow(level)).round()
 }
 
 export function isUpgradeVisible(
   definition: UpgradeDefinition,
   levels: UpgradeLevels,
   lifetimePoints: Decimal,
+  medalLevels: MedalUpgradeLevels = EMPTY_MEDAL_UPGRADE_LEVELS,
 ): boolean {
   if (!isUnlockRequirementMet(definition.unlockRequirement, { lifetimePoints })) return false
-  return definition.prerequisiteId === undefined || levels[definition.prerequisiteId] > 0
+  if (definition.prerequisiteId !== undefined && levels[definition.prerequisiteId] === 0)
+    return false
+  return (
+    definition.medalPrerequisiteId === undefined || medalLevels[definition.medalPrerequisiteId] > 0
+  )
 }
 
 export function isUpgradeMaxed(definition: UpgradeDefinition, level: number): boolean {
@@ -158,14 +203,15 @@ export function quoteUpgrade(
   levels: UpgradeLevels,
   lifetimePoints: Decimal,
   currentPoints: Decimal,
+  medalLevels: MedalUpgradeLevels = EMPTY_MEDAL_UPGRADE_LEVELS,
 ): UpgradeQuote {
   const definition = UPGRADE_DEFINITIONS.find((candidate) => candidate.id === upgradeId)
   if (definition === undefined) throw new Error(`Unknown upgrade: ${upgradeId}`)
 
   const level = levels[upgradeId]
-  const cost = upgradeCost(definition, level)
+  const cost = upgradeCost(definition, level, levels)
   let status: UpgradeAvailability
-  if (!isUpgradeVisible(definition, levels, lifetimePoints)) status = 'hidden'
+  if (!isUpgradeVisible(definition, levels, lifetimePoints, medalLevels)) status = 'hidden'
   else if (definition.kind === 'one-time' && level > 0) status = 'owned'
   else if (isUpgradeMaxed(definition, level)) status = 'maxed'
   else if (currentPoints.lt(cost)) status = 'unaffordable'
@@ -183,10 +229,12 @@ export function upgradeDefinitionsByInitialCost(kind: UpgradeKind): readonly Upg
 export function visibleOneTimeUpgradeIds(
   levels: UpgradeLevels,
   lifetimePoints: Decimal,
+  medalLevels: MedalUpgradeLevels = EMPTY_MEDAL_UPGRADE_LEVELS,
 ): readonly UpgradeId[] {
   const unlocked = UPGRADE_DEFINITIONS.filter(
     (definition) =>
-      definition.kind === 'one-time' && isUpgradeVisible(definition, levels, lifetimePoints),
+      definition.kind === 'one-time' &&
+      isUpgradeVisible(definition, levels, lifetimePoints, medalLevels),
   )
   return unlocked.map((definition) => definition.id)
 }
@@ -211,15 +259,25 @@ export function criticalChance(levels: UpgradeLevels): number {
   )
 }
 
-export function runModifiersForUpgrades(levels: UpgradeLevels): {
+export function runModifiersForUpgrades(
+  levels: UpgradeLevels,
+  medalLevels: MedalUpgradeLevels = EMPTY_MEDAL_UPGRADE_LEVELS,
+): {
   readonly missesPerRun: number
   readonly failureCooldownMs: number
   readonly speedScalingMultiplier: number
+  readonly requiredHits: number
+  readonly targetHalfWidth: number
 } {
+  const baseFailureCooldown =
+    levels['fail-cooldown'] > 0 ? FAILURE_COOLDOWN_UPGRADED_MS : RESULT_COOLDOWN_MS
   return {
-    missesPerRun: levels['miss-allowance'] > 0 ? MISSES_PER_RUN_UPGRADED : 0,
+    missesPerRun:
+      (levels['miss-allowance'] > 0 ? MISSES_PER_RUN_UPGRADED : 0) + medalMissesPerRun(medalLevels),
     failureCooldownMs:
-      levels['fail-cooldown'] > 0 ? FAILURE_COOLDOWN_UPGRADED_MS : RESULT_COOLDOWN_MS,
+      levels['rapid-recovery'] > 0 ? baseFailureCooldown * 0.5 : baseFailureCooldown,
     speedScalingMultiplier: levels['speed-scaling'] > 0 ? SPEED_SCALING_UPGRADED_MULTIPLIER : 1,
+    requiredHits: medalRequiredHits(medalLevels),
+    targetHalfWidth: medalTargetHalfWidth(medalLevels),
   }
 }

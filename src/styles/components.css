@@ -16,12 +16,32 @@
   height: 18px;
 }
 
-.progression-points {
-  display: flex;
+.progression-resources,
+.progression-points,
+.progression-medals {
   align-items: baseline;
   justify-content: center;
-  gap: 9px;
+}
+
+.progression-resources {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  gap: 0;
   margin-top: 24px;
+  transition:
+    grid-template-columns 500ms ease-out,
+    gap 500ms ease-out;
+}
+
+.progression-resources.has-medals {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
+.progression-points,
+.progression-medals {
+  display: flex;
+  gap: 9px;
   color: var(--color-text-muted);
   font-size: 0.78rem;
   font-weight: 800;
@@ -31,6 +51,45 @@
 
 .progression-points strong {
   color: var(--color-accent);
+  font-size: 1.25rem;
+}
+
+.progression-medals {
+  min-width: 0;
+  max-width: 0;
+  gap: 9px;
+  overflow: hidden;
+  padding-left: 0;
+  margin-left: 0;
+  border-left: var(--border-width) solid transparent;
+  opacity: 0;
+  white-space: nowrap;
+  transform: translateX(-10px);
+  transition:
+    max-width 500ms ease-out,
+    padding-left 500ms ease-out,
+    margin-left 500ms ease-out,
+    border-color 350ms ease-out,
+    opacity 350ms ease-out,
+    transform 500ms ease-out;
+}
+
+.progression-resources.has-medals .progression-medals {
+  width: 100%;
+  max-width: none;
+  padding-left: 18px;
+  margin-left: 0;
+  border-left-color: var(--color-border);
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.progression-medals strong,
+.progression-medals span {
+  color: var(--color-gold);
+}
+
+.progression-medals strong {
   font-size: 1.25rem;
 }
 
@@ -66,9 +125,15 @@
 }
 
 main {
-  width: min(100%, 800px);
+  width: 100%;
+  max-width: 800px;
   margin-inline: auto;
   padding: clamp(12px, 2.5vw, 24px);
+  transition: max-width 500ms ease-out;
+}
+
+main.is-medal-layout {
+  max-width: 1200px;
 }
 
 .game-stage {
@@ -91,10 +156,67 @@ main {
   -webkit-tap-highlight-color: transparent;
 }
 
+.upgrades-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
+  gap: 0;
+  margin-top: 18px;
+  transition:
+    grid-template-columns 500ms ease-out,
+    gap 500ms ease-out;
+}
+
+.upgrades-layout.is-medal-unlocked {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+}
+
 .upgrades {
   display: grid;
+  min-width: 0;
   gap: 24px;
-  margin-top: 18px;
+  align-content: start;
+}
+
+.medal-upgrades {
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 0;
+  border-left: var(--border-width) solid transparent;
+  opacity: 0;
+  transform: translateX(-14px);
+  visibility: hidden;
+  transition:
+    padding-left 500ms ease-out,
+    border-color 350ms ease-out,
+    opacity 350ms ease-out,
+    transform 500ms ease-out,
+    visibility 0s linear 500ms;
+}
+
+.upgrades-layout.is-medal-unlocked .medal-upgrades {
+  padding-left: 24px;
+  padding-right: 3px;
+  padding-bottom: 3px;
+  border-left-color: var(--color-border);
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.medal-upgrades h2,
+.medal-upgrade-card h3 {
+  color: var(--color-gold);
+}
+
+.medal-upgrades .upgrade-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.medal-upgrade-card button:not(:disabled) {
+  border-color: var(--color-gold);
+  color: var(--color-gold-light);
 }
 
 .upgrade-section {
@@ -106,9 +228,14 @@ main {
   border-top: var(--border-width) solid var(--color-border);
 }
 
-.upgrade-section h2 {
+.upgrade-section h2,
+.medal-upgrades h2 {
   margin-bottom: 12px;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
+}
+
+.upgrade-section h2 {
+  color: var(--color-accent);
 }
 
 .upgrade-grid {
@@ -131,8 +258,13 @@ main {
 }
 
 .upgrade-card.is-purchased {
-  border-color: var(--color-success);
-  box-shadow: 0 0 0 2px var(--color-success);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent);
+}
+
+.medal-upgrade-card.is-purchased {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 2px var(--color-gold);
 }
 
 @keyframes upgrade-unlock {

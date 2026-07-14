@@ -5,6 +5,7 @@ import {
   REQUIRED_HITS,
   RESULT_COOLDOWN_MS,
   SHIELD_INVULNERABILITY_MS,
+  TARGET_HALF_WIDTH_RADIANS,
 } from './constants'
 import {
   DEFAULT_RUN_MODIFIERS,
@@ -23,6 +24,8 @@ function hittableState(overrides: Partial<ActiveRunState> = {}): ActiveRunState 
     kind: 'active',
     markerAngle: 1,
     targetAngle: 1,
+    targetCritical: false,
+    targetHalfWidth: TARGET_HALF_WIDTH_RADIANS,
     direction: 1,
     hits: 0,
     consecutiveHits: 0,
@@ -36,19 +39,36 @@ function hittableState(overrides: Partial<ActiveRunState> = {}): ActiveRunState 
 
 describe('run state transitions', () => {
   it('uses the first activation only to start a run', () => {
-    const result = activateRun(createIdleState(0), 100, random)
+    const result = activateRun(
+      createIdleState(0),
+      100,
+      random,
+      DEFAULT_RUN_MODIFIERS,
+      new Decimal(1),
+      () => true,
+    )
     expect(result.kind).toBe('started')
+    if (result.kind !== 'started') throw new Error('Expected a started run')
     expect(result.state.hits).toBe(0)
+    expect(result.state.targetCritical).toBe(true)
   })
 
   it('reverses direction, relocates the target, and tracks base value after a hit', () => {
-    const result = activateRun(hittableState(), 100, random, DEFAULT_RUN_MODIFIERS, new Decimal(2))
+    const result = activateRun(
+      hittableState(),
+      100,
+      random,
+      DEFAULT_RUN_MODIFIERS,
+      new Decimal(2),
+      () => true,
+    )
     expect(result.kind).toBe('hit')
     if (result.kind !== 'hit') throw new Error('Expected a successful hit')
     expect(result.state.direction).toBe(-1)
     expect(result.state.targetAngle).not.toBe(result.state.markerAngle)
     expect(result.state.consecutiveHits).toBe(1)
     expect(result.state.basePointsEarned.eq(2)).toBe(true)
+    expect(result.state.targetCritical).toBe(true)
   })
 
   it('accepts an input when only the visible outlines touch', () => {
@@ -58,6 +78,57 @@ describe('run state transitions', () => {
       random,
     )
     expect(result.kind).toBe('hit')
+  })
+
+  it('uses the snapshotted target width for hits and passed-target detection', () => {
+    const justOutsideBase = HIT_TOLERANCE_RADIANS + 0.01
+    const base = activateRun(
+      hittableState({ markerAngle: 0, targetAngle: justOutsideBase }),
+      100,
+      random,
+    )
+    expect(base.kind).toBe('miss')
+
+    const largerHalfWidth = TARGET_HALF_WIDTH_RADIANS * 1.25
+    const larger = activateRun(
+      hittableState({
+        markerAngle: 0,
+        targetAngle: justOutsideBase,
+        targetHalfWidth: largerHalfWidth,
+      }),
+      100,
+      random,
+    )
+    expect(larger.kind).toBe('hit')
+
+    const passingState = hittableState({ markerAngle: 0, targetAngle: 0.1 })
+    expect(tickRunState(passingState, 0.16, 100, random).kind).toBe('passed-target')
+    expect(
+      tickRunState({ ...passingState, targetHalfWidth: largerHalfWidth }, 0.16, 100, random).kind,
+    ).toBe('none')
+  })
+
+  it('snapshots required hits and target width when a run starts', () => {
+    const result = activateRun(createIdleState(0), 100, random, {
+      ...DEFAULT_RUN_MODIFIERS,
+      requiredHits: 40,
+      targetHalfWidth: TARGET_HALF_WIDTH_RADIANS * 1.5,
+      missesPerRun: 2,
+    })
+    expect(result.kind).toBe('started')
+    if (result.kind !== 'started') throw new Error('Expected started run')
+    expect(result.state.requiredHits).toBe(40)
+    expect(result.state.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.5)
+    expect(result.state.missesRemaining).toBe(2)
+
+    const completion = activateRun(
+      { ...result.state, markerAngle: 1, targetAngle: 1, hits: 39 },
+      200,
+      random,
+    )
+    expect(completion.kind).toBe('completed')
+    if (completion.kind !== 'completed') throw new Error('Expected completed run')
+    expect(completion.state.requiredHits).toBe(40)
   })
 
   it('forgives one input miss, resets the streak, and preserves hit progress', () => {
@@ -80,11 +151,17 @@ describe('run state transitions', () => {
 
   it('fails immediately without an allowance and uses the configured cooldown', () => {
     const modifiers: RunModifiers = { ...DEFAULT_RUN_MODIFIERS, failureCooldownMs: 3_000 }
-    const result = activateRun(hittableState({ targetAngle: 3, hits: 7 }), 1_000, random, modifiers)
+    const result = activateRun(
+      hittableState({ targetAngle: 3, targetCritical: true, hits: 7 }),
+      1_000,
+      random,
+      modifiers,
+    )
     expect(result.kind).toBe('miss')
     if (result.kind !== 'miss') throw new Error('Expected a failed run')
     expect(result.state.hits).toBe(7)
     expect(result.state.cooldownEndsAt).toBe(4_000)
+    expect(result.state.targetCritical).toBe(true)
   })
 
   it('forgives a passed target once, then fails the next passed target', () => {
@@ -117,6 +194,10 @@ describe('run state transitions', () => {
     expect(completion.kind).toBe('completed')
     if (completion.kind !== 'completed') throw new Error('Expected completion')
     expect(completion.state.completionBonus.eq(6.5)).toBe(true)
+    expect(completion.state.medalsAwarded.eq(1)).toBe(true)
+    expect(completion.state.celebrationEndsAt).toBe(4_000)
+    expect(tickRunState(completion.state, 0.1, 3_999).state.kind).toBe('completed')
+    expect(tickRunState(completion.state, 0.1, 4_000).state.kind).toBe('idle')
     expect(activateRun(completion.state, 1_001, random).kind).toBe('started')
   })
 

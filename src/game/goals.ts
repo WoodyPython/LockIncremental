@@ -1,9 +1,13 @@
 import Decimal from 'break_infinity.js'
 
 export const FIRST_PROGRESSION_GOAL_ID = 'lifetime-points-100'
-export const FINAL_PROGRESSION_GOAL_ID = 'lifetime-points-1000'
+export const SECOND_PROGRESSION_GOAL_ID = 'lifetime-points-10000'
+export const FINAL_PROGRESSION_GOAL_ID = 'lifetime-points-1000000'
 
-export type GoalId = typeof FIRST_PROGRESSION_GOAL_ID | typeof FINAL_PROGRESSION_GOAL_ID
+export type GoalId =
+  | typeof FIRST_PROGRESSION_GOAL_ID
+  | typeof SECOND_PROGRESSION_GOAL_ID
+  | typeof FINAL_PROGRESSION_GOAL_ID
 
 export interface GoalState {
   readonly lifetimePoints: Decimal
@@ -28,7 +32,8 @@ export interface GoalDefinition {
 }
 
 const ONE_HUNDRED_POINTS = new Decimal(100)
-const ONE_THOUSAND_POINTS = new Decimal(1_000)
+const TEN_THOUSAND_POINTS = new Decimal(10_000)
+const ONE_MILLION_POINTS = new Decimal(1_000_000)
 
 export const GOAL_DEFINITIONS: readonly GoalDefinition[] = [
   {
@@ -42,14 +47,24 @@ export const GOAL_DEFINITIONS: readonly GoalDefinition[] = [
     isComplete: (snapshot) => snapshot.lifetimePoints.gte(ONE_HUNDRED_POINTS),
   },
   {
-    id: FINAL_PROGRESSION_GOAL_ID,
-    label: 'Earn 1,000 lifetime Points',
+    id: SECOND_PROGRESSION_GOAL_ID,
+    label: 'Earn 10,000 lifetime Points',
     showNumbers: true,
     progress: (snapshot) => ({
       current: snapshot.lifetimePoints,
-      requirement: ONE_THOUSAND_POINTS,
+      requirement: TEN_THOUSAND_POINTS,
     }),
-    isComplete: (snapshot) => snapshot.lifetimePoints.gte(ONE_THOUSAND_POINTS),
+    isComplete: (snapshot) => snapshot.lifetimePoints.gte(TEN_THOUSAND_POINTS),
+  },
+  {
+    id: FINAL_PROGRESSION_GOAL_ID,
+    label: 'Earn 1,000,000 lifetime Points',
+    showNumbers: true,
+    progress: (snapshot) => ({
+      current: snapshot.lifetimePoints,
+      requirement: ONE_MILLION_POINTS,
+    }),
+    isComplete: (snapshot) => snapshot.lifetimePoints.gte(ONE_MILLION_POINTS),
   },
 ]
 

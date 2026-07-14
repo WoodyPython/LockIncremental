@@ -17,8 +17,13 @@ export const FINAL_MAX_TARGET_TRAVEL_RADIANS = Math.PI
 export const MAX_FRAME_DELTA_SECONDS = 0.1
 export const RESULT_COOLDOWN_MS = 5_000
 export const SHIELD_INVULNERABILITY_MS = 200
-export const COMPLETION_CELEBRATION_MS = 1_500
+export const COMPLETION_CELEBRATION_MS = 3_000
 export const COMPLETION_BONUS_RATE = 0.25
+export const JACKPOT_MEDAL_REWARD = 1
+
+export function hitToleranceForTargetHalfWidth(targetHalfWidth: number): number {
+  return targetHalfWidth + TARGET_OUTLINE_CAP_RADIANS + BAR_OUTLINE_HALF_WIDTH_RADIANS
+}
 
 export function activeSpeedForHits(hits: number, scalingMultiplier = 1): number {
   return (

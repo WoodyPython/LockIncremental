@@ -44,7 +44,7 @@ export function presentActivation(
   }
   if (result.kind === 'completed') {
     return {
-      announcement: `Run complete. ${formatDecimal(result.reward)} Points earned.`,
+      announcement: `Run complete. ${formatDecimal(result.reward)} Points and ${formatDecimal(result.medalsAwarded)} Medal earned.`,
       effect: 'completed',
       gain:
         hitAngle === null

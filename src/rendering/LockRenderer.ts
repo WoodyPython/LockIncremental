@@ -1,5 +1,5 @@
 import Decimal from 'break_infinity.js'
-import { COMPLETION_CELEBRATION_MS, TARGET_HALF_WIDTH_RADIANS } from '../game/constants'
+import { COMPLETION_CELEBRATION_MS } from '../game/constants'
 import { cooldownRemainingMs, type RunState } from '../game/RunState'
 import { formatDecimal } from '../utils/format'
 
@@ -124,7 +124,16 @@ export class LockRenderer {
     context.stroke()
 
     if (run.kind === 'active' || run.kind === 'failed') {
-      this.drawTarget(run.targetAngle, center, radius, ringWidth, palette)
+      this.drawTarget(
+        run.targetAngle,
+        run.targetHalfWidth,
+        run.targetCritical,
+        now,
+        center,
+        radius,
+        ringWidth,
+        palette,
+      )
     }
 
     this.drawBar(run.markerAngle, center, radius, palette)
@@ -185,6 +194,9 @@ export class LockRenderer {
 
   private drawTarget(
     angle: number,
+    targetHalfWidth: number,
+    critical: boolean,
+    now: number,
     center: number,
     radius: number,
     ringWidth: number,
@@ -194,26 +206,47 @@ export class LockRenderer {
     this.context.strokeStyle = palette.outline
     this.context.lineWidth = ringWidth * 1.65
     this.context.beginPath()
-    this.context.arc(
-      center,
-      center,
-      radius,
-      angle - TARGET_HALF_WIDTH_RADIANS,
-      angle + TARGET_HALF_WIDTH_RADIANS,
-    )
+    this.context.arc(center, center, radius, angle - targetHalfWidth, angle + targetHalfWidth)
     this.context.stroke()
-    this.context.strokeStyle = palette.target
+    this.context.strokeStyle = critical ? palette.gold : palette.target
     this.context.lineWidth = ringWidth * 1.25
     this.context.beginPath()
-    this.context.arc(
-      center,
-      center,
-      radius,
-      angle - TARGET_HALF_WIDTH_RADIANS,
-      angle + TARGET_HALF_WIDTH_RADIANS,
-    )
+    this.context.arc(center, center, radius, angle - targetHalfWidth, angle + targetHalfWidth)
     this.context.stroke()
     this.context.lineCap = 'butt'
+    if (critical) this.drawCriticalSparkles(angle, now, center, radius, ringWidth, palette)
+  }
+
+  private drawCriticalSparkles(
+    targetAngle: number,
+    now: number,
+    center: number,
+    radius: number,
+    ringWidth: number,
+    palette: Palette,
+  ): void {
+    const animatedPhase = this.reduceMotion.matches ? 0 : now / 220
+    this.context.save()
+    for (let index = 0; index < 5; index += 1) {
+      const angle = targetAngle + (index - 2) * 0.065
+      const pulse = this.reduceMotion.matches
+        ? 1
+        : 0.7 + Math.sin(animatedPhase + index * 1.6) * 0.3
+      const distance = radius + ringWidth * (1.25 + (index % 2) * 0.4)
+      const x = center + Math.cos(angle) * distance
+      const y = center + Math.sin(angle) * distance
+      const size = Math.max(2.5, ringWidth * 0.22 * pulse)
+      this.context.globalAlpha = 0.65 + pulse * 0.35
+      this.context.fillStyle = index % 2 === 0 ? palette.goldLight : palette.gold
+      this.context.beginPath()
+      this.context.moveTo(x, y - size)
+      this.context.lineTo(x + size * 0.55, y)
+      this.context.lineTo(x, y + size)
+      this.context.lineTo(x - size * 0.55, y)
+      this.context.closePath()
+      this.context.fill()
+    }
+    this.context.restore()
   }
 
   private drawCenterText(
@@ -254,7 +287,12 @@ export class LockRenderer {
       this.context.fillText(
         `+${formatDecimal(run.completionBonus)} BONUS`,
         center,
-        center + size * 0.1,
+        center + size * 0.085,
+      )
+      this.context.fillText(
+        `+${formatDecimal(run.medalsAwarded)} MEDAL`,
+        center,
+        center + size * 0.135,
       )
     }
   }
@@ -311,7 +349,8 @@ export class LockRenderer {
     const x = center + Math.cos(effect.angle) * distance
     const y = center + Math.sin(effect.angle) * distance
     this.context.globalAlpha = 1 - progress
-    this.context.fillStyle = effect.kind === 'shielded' ? palette.shield : palette.success
+    this.context.fillStyle =
+      effect.kind === 'shielded' ? palette.shield : effect.critical ? palette.gold : palette.success
     this.context.font = `800 ${Math.max(16, size * 0.045)}px system-ui, sans-serif`
     this.context.textAlign = 'center'
     this.context.textBaseline = 'middle'

@@ -82,12 +82,12 @@ Desktop:
 
 - A centered lock game occupies the primary visual area.
 - Current run score appears in the center of the lock.
-- Points appear below the lock and above the upgrades divider.
+- Points appear below the lock and above the upgrades divider using amount-first order (`X Points`). After the first Jackpot, gold Medals appear beside Points behind a vertical divider.
 - Upgrade sections remain hidden until progression unlocks them.
 
 Mobile:
 
-- Points remain directly above the upgrades divider.
+- Points and unlocked Medals remain directly above the upgrades divider.
 - The lock scales to fit the width while remaining circular.
 - Controls remain large enough for touch input.
 
@@ -95,7 +95,7 @@ Mobile:
 
 At minimum, show:
 
-- Current Points below the lock and above a horizontal upgrades divider
+- Current Points below the lock and above a horizontal upgrades divider, with unlocked Medals beside them
 - Current run score and requirement centered inside the lock, such as `7 / 50`
 - A large `Click to Play` idle/restart prompt
 
@@ -190,23 +190,27 @@ The loss animation must not be a rapid screen flash. Respect reduced-motion pref
 
 ### Run completion feedback
 
-On completing all 50 hits:
+On completing all currently required hits (initially 50):
 
 - Stop active input.
-- Show a clear gold `Jackpot!` state that cannot be confused with failure, with the completion bonus displayed beneath the heading.
+- Show a clear gold `Jackpot!` state for three seconds that cannot be confused with failure, with the completion bonus and `+1 Medal` displayed beneath the heading.
 - Award the run reward exactly once.
 - Use gold particles, an outward ring, or a comparable celebratory animation.
 - Do not apply the failure cooldown; allow immediate replay input and otherwise return to idle after the brief celebration.
 
 ### Points and upgrades
 
-- Each target begins at a base value of 1 Point. Repeatable Target Value levels add 25% and cost `5 × 1.5^level` Points, rounded to the nearest integer.
-- On completion of the first progression goal (100 lifetime Points), fade in all one-time upgrades together: consecutive value (50), Critical Hits (100), a three-second failure cooldown (150), 20% lower speed scaling (150), 2× all Point gains (250), and one forgiven miss (500). Feature visibility should reference goal IDs rather than duplicate numeric thresholds.
+- Each target begins at a base value of 1 Point. Repeatable Target Value levels add 25% and cost `3 × 1.4^level` Points, rounded to the nearest integer.
+- On completion of the first progression goal (100 lifetime Points), fade in all initial one-time upgrades together: consecutive value (100), Critical Hits (100), a three-second failure cooldown (250), 2× all Point gains (500), 20% lower speed scaling (1,000), and one forgiven miss (2,500). Feature visibility should reference goal IDs rather than duplicate numeric thresholds.
 - Consecutive value begins at 1× on the first target and scales subsequent uninterrupted targets by 1.05×. A forgiven miss skips the target without Points or hit progress, resets the streak, reverses direction, and consumes the run's allowance.
-- Critical Hits begin at 2% chance and grant 5× target Points. Critical-chance levels add 0.5 percentage points, cost `25 × 1.5^level` rounded to the nearest integer, and cap at 100%.
+- Critical Hits begin at 2% chance and grant 5× target Points. Roll critical status when each target spawns and keep it fixed until that target is resolved. Render critical targets gold with sparkling accents so the bonus is visible before the hit; when the system requests reduced motion, keep the gold styling and render the sparkles without animation. Critical-chance levels add 0.5 percentage points, cost `20 × 1.5^level` rounded to the nearest integer, and cap at 100%.
 - The completion bonus is 25% of the run's accumulated pre-critical target values, so critical hits do not multiply it.
-- Place upgrade cards directly below the lock without a surrounding section panel. Separate repeatable and one-time sections with a horizontal divider.
-- Preserve purchased one-time cards with a green success outline and show every one-time upgrade once the section unlocks. Place cards in increasing base-cost order when the view is created, then keep that order fixed even as repeatable costs change. Repeatable cards remain visible and show their cumulative result. The fade-in occurs only once when the required goal is reached and must not restart after purchases, hits, or tab changes.
+- Award one Medal exactly once per Jackpot. The first Medal earned permanently reveals the gold Medal readout and Medal shop for the session, even after the Medal is spent.
+- Place the Medal shop to the right of the normal upgrades behind a vertical divider. Match the `Point Upgrades` and `Medal Upgrades` heading typography, use gold for purchased Medal-card outlines, and leave enough edge space that outlines are never clipped. Smoothly resize the normal upgrades while the shop fades and slides in; on mobile, stack it below a horizontal divider. Disable this transition when reduced motion is requested.
+- Keep Medal cards in one fixed vertical list ordered as Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). Their effects provide a stacking 2× Point multiplier, additive 25% target-size increases, five-target requirement reductions, an additive forgiven miss, and a recorded WIP Research unlock. Snapshot target size, required hits, and Medal miss allowance when a run starts.
+- Shorter Jackpot reveals Rapid Recovery for 10,000 Points and Efficient Scaling for 25,000 Points. Rapid Recovery halves the effective failure cooldown, including Quick Recovery; Efficient Scaling changes each repeatable base to `1 + (base − 1) × 0.75` without reordering cards.
+- Place upgrade cards directly below the lock without a surrounding section panel. Label the repeatable section `Point Upgrades` in the Point accent color, omit a visible one-time heading, and retain the horizontal divider between the Point sections. Align each unlocked currency readout above the center of the shop that spends it.
+- Preserve purchased one-time cards with a Point-accent outline and show every one-time upgrade once the section unlocks. Place cards in increasing base-cost order when the view is created, then keep that order fixed even as repeatable costs change. Repeatable cards remain visible and show their cumulative result. The fade-in occurs only once when the required goal is reached and must not restart after purchases, hits, or tab changes.
 - When Second Chance is consumed, use a light ocean-blue activation effect and grant 200ms of invulnerability. Ignore inputs during that window, and safely relocate a target if it is passed before protection expires.
 
 ### Animation timing
@@ -291,7 +295,7 @@ Keep the version in one source of truth and inject or import it where displayed.
 
 ### Goal progress bar
 
-Show progress first toward 100 lifetime Points, then toward 1,000 lifetime Points. Keep the 1,000-Point goal complete until a later goal is configured.
+Show progress toward 100, then 10,000, then 1,000,000 lifetime Points. Keep the million-Point goal complete until a later goal is configured.
 
 Required content:
 

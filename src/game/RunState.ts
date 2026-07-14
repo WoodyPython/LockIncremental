@@ -2,12 +2,14 @@ import Decimal from 'break_infinity.js'
 import {
   COMPLETION_BONUS_RATE,
   COMPLETION_CELEBRATION_MS,
-  HIT_TOLERANCE_RADIANS,
   IDLE_SPEED_RADIANS_PER_SECOND,
+  JACKPOT_MEDAL_REWARD,
   REQUIRED_HITS,
   RESULT_COOLDOWN_MS,
   SHIELD_INVULNERABILITY_MS,
+  TARGET_HALF_WIDTH_RADIANS,
   activeSpeedForHits,
+  hitToleranceForTargetHalfWidth,
 } from './constants'
 import { advanceAngle, didPassTarget, isWithinTarget, placeTarget, type Direction } from './math'
 
@@ -15,12 +17,16 @@ export interface RunModifiers {
   readonly missesPerRun: number
   readonly failureCooldownMs: number
   readonly speedScalingMultiplier: number
+  readonly requiredHits: number
+  readonly targetHalfWidth: number
 }
 
 export const DEFAULT_RUN_MODIFIERS: RunModifiers = {
   missesPerRun: 0,
   failureCooldownMs: RESULT_COOLDOWN_MS,
   speedScalingMultiplier: 1,
+  requiredHits: REQUIRED_HITS,
+  targetHalfWidth: TARGET_HALF_WIDTH_RADIANS,
 }
 
 export interface IdleRunState {
@@ -32,6 +38,8 @@ export interface ActiveRunState {
   readonly kind: 'active'
   readonly markerAngle: number
   readonly targetAngle: number
+  readonly targetCritical: boolean
+  readonly targetHalfWidth: number
   readonly direction: Direction
   readonly hits: number
   readonly consecutiveHits: number
@@ -45,6 +53,8 @@ export interface FailedRunState {
   readonly kind: 'failed'
   readonly markerAngle: number
   readonly targetAngle: number
+  readonly targetCritical: boolean
+  readonly targetHalfWidth: number
   readonly hits: number
   readonly requiredHits: number
   readonly cooldownEndsAt: number
@@ -58,6 +68,7 @@ export interface CompletedRunState {
   readonly completedAt: number
   readonly celebrationEndsAt: number
   readonly completionBonus: Decimal
+  readonly medalsAwarded: Decimal
 }
 
 export type RunState = IdleRunState | ActiveRunState | FailedRunState | CompletedRunState
@@ -77,6 +88,8 @@ export type TickTransition =
   | { readonly kind: 'invulnerable'; readonly state: ActiveRunState }
   | { readonly kind: 'passed-target'; readonly state: FailedRunState }
 
+const NEVER_CRITICAL = (): boolean => false
+
 export function createIdleState(markerAngle = -Math.PI / 2): IdleRunState {
   return { kind: 'idle', markerAngle }
 }
@@ -86,34 +99,47 @@ export function startRun(
   random: () => number,
   modifiers: RunModifiers = DEFAULT_RUN_MODIFIERS,
   direction: Direction = 1,
+  rollCriticalTarget: () => boolean = NEVER_CRITICAL,
 ): ActiveRunState {
   return {
     kind: 'active',
     markerAngle,
     targetAngle: placeTarget(markerAngle, direction, random, 0),
+    targetCritical: rollCriticalTarget(),
+    targetHalfWidth: modifiers.targetHalfWidth,
     direction,
     hits: 0,
     consecutiveHits: 0,
     missesRemaining: modifiers.missesPerRun,
     invulnerableUntil: 0,
     basePointsEarned: new Decimal(0),
-    requiredHits: REQUIRED_HITS,
+    requiredHits: modifiers.requiredHits,
   }
 }
 
-function relocateTarget(state: ActiveRunState, random: () => number): ActiveRunState {
+function relocateTarget(
+  state: ActiveRunState,
+  random: () => number,
+  rollCriticalTarget: () => boolean,
+): ActiveRunState {
   const nextDirection: Direction = state.direction === 1 ? -1 : 1
   return {
     ...state,
     direction: nextDirection,
     consecutiveHits: 0,
     targetAngle: placeTarget(state.markerAngle, nextDirection, random, state.hits),
+    targetCritical: rollCriticalTarget(),
   }
 }
 
-function forgiveMiss(state: ActiveRunState, random: () => number, now: number): ActiveRunState {
+function forgiveMiss(
+  state: ActiveRunState,
+  random: () => number,
+  now: number,
+  rollCriticalTarget: () => boolean,
+): ActiveRunState {
   return {
-    ...relocateTarget(state, random),
+    ...relocateTarget(state, random, rollCriticalTarget),
     missesRemaining: state.missesRemaining - 1,
     invulnerableUntil: now + SHIELD_INVULNERABILITY_MS,
   }
@@ -125,6 +151,7 @@ export function tickRunState(
   now = 0,
   random: () => number = Math.random,
   modifiers: RunModifiers = DEFAULT_RUN_MODIFIERS,
+  rollCriticalTarget: () => boolean = NEVER_CRITICAL,
 ): TickTransition {
   if (state.kind === 'idle') {
     return {
@@ -155,16 +182,22 @@ export function tickRunState(
         nextMarkerAngle,
         state.targetAngle,
         state.direction,
-        HIT_TOLERANCE_RADIANS,
+        hitToleranceForTargetHalfWidth(state.targetHalfWidth),
       )
     ) {
       return { kind: 'none', state: movedState }
     }
     if (state.missesRemaining > 0) {
-      return { kind: 'forgiven-miss', state: forgiveMiss(movedState, random, now) }
+      return {
+        kind: 'forgiven-miss',
+        state: forgiveMiss(movedState, random, now, rollCriticalTarget),
+      }
     }
     if (now < state.invulnerableUntil) {
-      return { kind: 'invulnerable', state: relocateTarget(movedState, random) }
+      return {
+        kind: 'invulnerable',
+        state: relocateTarget(movedState, random, rollCriticalTarget),
+      }
     }
     return {
       kind: 'passed-target',
@@ -172,6 +205,8 @@ export function tickRunState(
         kind: 'failed',
         markerAngle: nextMarkerAngle,
         targetAngle: state.targetAngle,
+        targetCritical: state.targetCritical,
+        targetHalfWidth: state.targetHalfWidth,
         hits: state.hits,
         requiredHits: state.requiredHits,
         cooldownEndsAt: now + modifiers.failureCooldownMs,
@@ -194,25 +229,44 @@ export function activateRun(
   random: () => number,
   modifiers: RunModifiers = DEFAULT_RUN_MODIFIERS,
   targetBasePoints = new Decimal(1),
+  rollCriticalTarget: () => boolean = NEVER_CRITICAL,
 ): ActivationTransition {
   if (state.kind === 'idle') {
-    return { kind: 'started', state: startRun(state.markerAngle, random, modifiers) }
+    return {
+      kind: 'started',
+      state: startRun(state.markerAngle, random, modifiers, 1, rollCriticalTarget),
+    }
   }
   if (state.kind === 'failed') {
     if (now < state.cooldownEndsAt) return { kind: 'cooldown', state }
-    return { kind: 'started', state: startRun(state.markerAngle, random, modifiers) }
+    return {
+      kind: 'started',
+      state: startRun(state.markerAngle, random, modifiers, 1, rollCriticalTarget),
+    }
   }
   if (state.kind === 'completed') {
-    return { kind: 'started', state: startRun(state.markerAngle, random, modifiers) }
+    return {
+      kind: 'started',
+      state: startRun(state.markerAngle, random, modifiers, 1, rollCriticalTarget),
+    }
   }
 
   if (now < state.invulnerableUntil) {
     return { kind: 'invulnerable', state }
   }
 
-  if (!isWithinTarget(state.markerAngle, state.targetAngle, HIT_TOLERANCE_RADIANS)) {
+  if (
+    !isWithinTarget(
+      state.markerAngle,
+      state.targetAngle,
+      hitToleranceForTargetHalfWidth(state.targetHalfWidth),
+    )
+  ) {
     if (state.missesRemaining > 0) {
-      return { kind: 'forgiven-miss', state: forgiveMiss(state, random, now) }
+      return {
+        kind: 'forgiven-miss',
+        state: forgiveMiss(state, random, now, rollCriticalTarget),
+      }
     }
     return {
       kind: 'miss',
@@ -220,6 +274,8 @@ export function activateRun(
         kind: 'failed',
         markerAngle: state.markerAngle,
         targetAngle: state.targetAngle,
+        targetCritical: state.targetCritical,
+        targetHalfWidth: state.targetHalfWidth,
         hits: state.hits,
         requiredHits: state.requiredHits,
         cooldownEndsAt: now + modifiers.failureCooldownMs,
@@ -240,6 +296,7 @@ export function activateRun(
         completedAt: now,
         celebrationEndsAt: now + COMPLETION_CELEBRATION_MS,
         completionBonus: nextBasePoints.times(COMPLETION_BONUS_RATE),
+        medalsAwarded: new Decimal(JACKPOT_MEDAL_REWARD),
       },
     }
   }
@@ -254,6 +311,7 @@ export function activateRun(
       consecutiveHits: state.consecutiveHits + 1,
       basePointsEarned: nextBasePoints,
       targetAngle: placeTarget(state.markerAngle, nextDirection, random, nextHits),
+      targetCritical: rollCriticalTarget(),
     },
   }
 }

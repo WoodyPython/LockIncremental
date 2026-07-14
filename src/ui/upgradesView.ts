@@ -1,5 +1,12 @@
 import type { GameSnapshot } from '../game/GameSimulation'
 import {
+  medalUpgradeDefinitionsByCost,
+  quoteMedalUpgrade,
+  type MedalUpgradeDefinition,
+  type MedalUpgradeId,
+  type MedalUpgradeQuote,
+} from '../game/medalUpgrades'
+import {
   UPGRADE_DEFINITIONS,
   criticalChance,
   isUpgradeVisible,
@@ -37,32 +44,63 @@ export function upgradeButtonState(quote: UpgradeQuote): {
   }
 }
 
+export function medalUpgradeButtonState(quote: MedalUpgradeQuote): {
+  readonly disabled: boolean
+  readonly text: string
+} {
+  return {
+    disabled: quote.status !== 'available',
+    text:
+      quote.status === 'owned'
+        ? 'Purchased'
+        : `${formatDecimal(quote.definition.cost)} ${quote.definition.cost.eq(1) ? 'Medal' : 'Medals'}`,
+  }
+}
+
 export class UpgradesView {
   public readonly element: HTMLElement
   private readonly cards = new Map<UpgradeId, UpgradeElements>()
+  private readonly medalCards = new Map<MedalUpgradeId, UpgradeElements>()
   private readonly sections = new Map<UpgradeKind, HTMLElement>()
+  private readonly medalSection: HTMLElement
   private readonly revealed = new Set<UpgradeId>(['target-value'])
   private readonly unlockCleanupTimers = new Map<UpgradeId, number>()
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-  public constructor(private readonly onPurchase: (upgradeId: UpgradeId) => void) {
+  public constructor(
+    private readonly onPurchase: (upgradeId: UpgradeId) => void,
+    private readonly onMedalPurchase: (upgradeId: MedalUpgradeId) => void,
+  ) {
     this.element = document.createElement('div')
-    this.element.className = 'upgrades'
-    this.element.append(
-      this.createSection('Repeatable Upgrades', 'multi-buy'),
-      this.createSection('One-time Upgrades', 'one-time'),
+    this.element.className = 'upgrades-layout'
+    const pointUpgrades = document.createElement('div')
+    pointUpgrades.className = 'upgrades'
+    pointUpgrades.append(
+      this.createSection('Point Upgrades', 'multi-buy'),
+      this.createSection(null, 'one-time'),
     )
+    this.medalSection = this.createMedalSection()
+    this.element.append(pointUpgrades, this.medalSection)
   }
 
   public update(snapshot: GameSnapshot): void {
+    const medalShopUnlocked = snapshot.lifetimeMedals.gte(1)
+    this.element.classList.toggle('is-medal-unlocked', medalShopUnlocked)
+    this.medalSection.setAttribute('aria-hidden', String(!medalShopUnlocked))
+
     const visibleOneTimeIds = new Set(
-      visibleOneTimeUpgradeIds(snapshot.upgrades, snapshot.lifetimePoints),
+      visibleOneTimeUpgradeIds(snapshot.upgrades, snapshot.lifetimePoints, snapshot.medalUpgrades),
     )
 
     for (const definition of UPGRADE_DEFINITIONS) {
       const elements = this.cards.get(definition.id)
       if (elements === undefined) continue
-      const unlocked = isUpgradeVisible(definition, snapshot.upgrades, snapshot.lifetimePoints)
+      const unlocked = isUpgradeVisible(
+        definition,
+        snapshot.upgrades,
+        snapshot.lifetimePoints,
+        snapshot.medalUpgrades,
+      )
       const visible =
         unlocked && (definition.kind === 'multi-buy' || visibleOneTimeIds.has(definition.id))
       elements.card.hidden = !visible
@@ -76,6 +114,7 @@ export class UpgradesView {
         snapshot.upgrades,
         snapshot.lifetimePoints,
         snapshot.points,
+        snapshot.medalUpgrades,
       )
       elements.card.classList.toggle('is-purchased', quote.status === 'owned')
       elements.level.hidden = definition.kind === 'one-time'
@@ -96,6 +135,21 @@ export class UpgradesView {
     for (const section of this.sections.values()) {
       section.hidden = !Array.from(section.querySelectorAll<HTMLElement>('.upgrade-card')).some(
         (card) => !card.hidden,
+      )
+    }
+
+    for (const definition of medalUpgradeDefinitionsByCost()) {
+      const elements = this.medalCards.get(definition.id)
+      if (elements === undefined) continue
+      const quote = quoteMedalUpgrade(definition.id, snapshot.medalUpgrades, snapshot.medals)
+      const buttonState = medalUpgradeButtonState(quote)
+      elements.card.classList.toggle('is-purchased', quote.status === 'owned')
+      elements.level.hidden = true
+      elements.button.disabled = !medalShopUnlocked || buttonState.disabled
+      elements.button.textContent = buttonState.text
+      elements.button.setAttribute(
+        'aria-label',
+        `${definition.name}: ${elements.button.textContent}`,
       )
     }
   }
@@ -150,21 +204,65 @@ export class UpgradesView {
     return card
   }
 
-  private createSection(title: string, kind: UpgradeKind): HTMLElement {
+  private createSection(title: string | null, kind: UpgradeKind): HTMLElement {
     const section = document.createElement('section')
     section.className = 'upgrade-section'
     section.dataset.upgradeKind = kind
     section.hidden = kind === 'one-time'
-    const heading = document.createElement('h2')
-    heading.textContent = title
+    if (title === null) section.setAttribute('aria-label', 'Additional Point Upgrades')
     const grid = document.createElement('div')
     grid.className = 'upgrade-grid'
     const upgrades = upgradeDefinitionsByInitialCost(kind)
     for (const upgrade of upgrades) {
       grid.append(this.createCard(upgrade))
     }
-    section.append(heading, grid)
+    if (title !== null) {
+      const heading = document.createElement('h2')
+      heading.textContent = title
+      section.append(heading)
+    }
+    section.append(grid)
     this.sections.set(kind, section)
     return section
+  }
+
+  private createMedalSection(): HTMLElement {
+    const section = document.createElement('section')
+    section.className = 'medal-upgrades'
+    section.dataset.medalUpgrades = ''
+    section.setAttribute('aria-hidden', 'true')
+    const heading = document.createElement('h2')
+    heading.textContent = 'Medal Upgrades'
+    const grid = document.createElement('div')
+    grid.className = 'upgrade-grid'
+    for (const definition of medalUpgradeDefinitionsByCost()) {
+      grid.append(this.createMedalCard(definition))
+    }
+    section.append(heading, grid)
+    return section
+  }
+
+  private createMedalCard(definition: MedalUpgradeDefinition): HTMLElement {
+    const card = document.createElement('article')
+    card.className = 'upgrade-card medal-upgrade-card'
+    card.dataset.medalUpgradeId = definition.id
+
+    const heading = document.createElement('h3')
+    heading.textContent = definition.name
+    const description = document.createElement('p')
+    description.textContent = definition.description
+    const level = document.createElement('div')
+    level.className = 'upgrade-level'
+    level.hidden = true
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.disabled = true
+    button.addEventListener('click', () => {
+      this.onMedalPurchase(definition.id)
+    })
+
+    card.append(heading, description, level, button)
+    this.medalCards.set(definition.id, { card, level, button })
+    return card
   }
 }

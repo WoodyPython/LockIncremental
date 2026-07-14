@@ -17,7 +17,7 @@ export class InputController {
   private readonly handlePointerDown = (event: PointerEvent): void => {
     if (!event.isPrimary || event.button !== 0) return
     event.preventDefault()
-    this.element.blur()
+    this.element.focus({ preventScroll: true })
     this.activate()
   }
 

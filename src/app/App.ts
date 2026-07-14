@@ -17,6 +17,9 @@ export class App {
   private input: InputController | null = null
   private tabs: TabsController | null = null
   private pointsValue!: HTMLElement
+  private medalsValue!: HTMLElement
+  private resourceRow!: HTMLElement
+  private mainContent!: HTMLElement
   private goalText!: HTMLElement
   private goalFill!: HTMLElement
   private liveRegion!: HTMLElement
@@ -36,7 +39,7 @@ export class App {
             <button id="tab-settings" class="tab" type="button" role="tab" data-tab="settings" aria-selected="false" aria-controls="panel-settings" tabindex="-1">Settings</button>
           </nav>
         </header>
-        <main>
+        <main class="main-content">
           <section id="panel-main" class="tab-panel" role="tabpanel" data-panel="main" aria-labelledby="tab-main">
             <h1 id="main-heading" class="visually-hidden">Main game</h1>
             <div class="game-stage">
@@ -49,9 +52,15 @@ export class App {
                 aria-label="Lock game. Activate to start, then activate when the rotating bar overlaps the target."
               ></canvas>
             </div>
-            <div class="progression-points" aria-label="Current Points">
-              <span>Points</span>
-              <strong data-readout="points">0</strong>
+            <div class="progression-resources" data-resources>
+              <div class="progression-points" aria-label="Current Points">
+                <strong data-readout="points">0</strong>
+                <span>Points</span>
+              </div>
+              <div class="progression-medals" aria-label="Current Medals" aria-hidden="true" data-medal-readout>
+                <strong data-readout="medals">0</strong>
+                <span>Medals</span>
+              </div>
             </div>
             <div class="progression-separator" data-upgrades-divider aria-hidden="true"></div>
             <div data-upgrades></div>
@@ -82,18 +91,33 @@ export class App {
 
     const canvas = this.requireElement<HTMLCanvasElement>('.lock-canvas')
     this.pointsValue = this.requireElement('[data-readout="points"]')
+    this.medalsValue = this.requireElement('[data-readout="medals"]')
+    this.resourceRow = this.requireElement('[data-resources]')
+    this.mainContent = this.requireElement('.main-content')
     this.goalText = this.requireElement('[data-goal-text]')
     this.goalFill = this.requireElement('[data-goal-fill]')
     this.liveRegion = this.requireElement('[data-live]')
-    this.upgradesView = new UpgradesView((upgradeId) => {
-      const result = this.simulation.purchase(upgradeId)
-      if (result.kind === 'purchased') {
-        this.liveRegion.textContent = `Upgrade purchased for ${formatDecimal(result.cost)} Points.`
-      } else if (result.kind === 'unaffordable') {
-        this.liveRegion.textContent = 'Not enough Points for that upgrade.'
-      }
-      this.renderUi()
-    })
+    this.upgradesView = new UpgradesView(
+      (upgradeId) => {
+        const result = this.simulation.purchase(upgradeId)
+        if (result.kind === 'purchased') {
+          this.liveRegion.textContent = `Upgrade purchased for ${formatDecimal(result.cost)} Points.`
+        } else if (result.kind === 'unaffordable') {
+          this.liveRegion.textContent = 'Not enough Points for that upgrade.'
+        }
+        this.renderUi()
+      },
+      (upgradeId) => {
+        const result = this.simulation.purchaseMedalUpgrade(upgradeId)
+        if (result.kind === 'purchased') {
+          const currency = result.cost.eq(1) ? 'Medal' : 'Medals'
+          this.liveRegion.textContent = `Upgrade purchased for ${formatDecimal(result.cost)} ${currency}.`
+        } else if (result.kind === 'unaffordable') {
+          this.liveRegion.textContent = 'Not enough Medals for that upgrade.'
+        }
+        this.renderUi()
+      },
+    )
     this.requireElement('[data-upgrades]').append(this.upgradesView.element)
     this.renderThemeChoices()
 
@@ -149,6 +173,14 @@ export class App {
   private renderUi(): void {
     const snapshot = this.simulation.getSnapshot()
     this.pointsValue.textContent = formatDecimal(snapshot.points)
+    this.medalsValue.textContent = formatDecimal(snapshot.medals)
+    const medalShopUnlocked = snapshot.lifetimeMedals.gte(1)
+    this.resourceRow.classList.toggle('has-medals', medalShopUnlocked)
+    this.mainContent.classList.toggle('is-medal-layout', medalShopUnlocked)
+    this.requireElement('[data-medal-readout]').setAttribute(
+      'aria-hidden',
+      String(!medalShopUnlocked),
+    )
     this.updateGoal(snapshot)
     this.upgradesView.update(snapshot)
   }

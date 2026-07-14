@@ -10,6 +10,13 @@ import {
   type RunState,
 } from './RunState'
 import {
+  EMPTY_MEDAL_UPGRADE_LEVELS,
+  medalPointGainMultiplier,
+  quoteMedalUpgrade,
+  type MedalUpgradeId,
+  type MedalUpgradeLevels,
+} from './medalUpgrades'
+import {
   EMPTY_UPGRADE_LEVELS,
   CRITICAL_REWARD_MULTIPLIER,
   consecutiveMultiplier,
@@ -26,7 +33,10 @@ export interface GameSnapshot {
   readonly run: RunState
   readonly points: Decimal
   readonly lifetimePoints: Decimal
+  readonly medals: Decimal
+  readonly lifetimeMedals: Decimal
   readonly upgrades: UpgradeLevels
+  readonly medalUpgrades: MedalUpgradeLevels
 }
 
 export type GameTickResult =
@@ -52,6 +62,7 @@ export type GameActivationResult =
       readonly reward: Decimal
       readonly targetReward: Decimal
       readonly completionBonus: Decimal
+      readonly medalsAwarded: Decimal
       readonly critical: boolean
     }
   | {
@@ -71,17 +82,28 @@ export type PurchaseResult =
   | { readonly kind: 'purchased'; readonly upgradeId: UpgradeId; readonly cost: Decimal }
   | { readonly kind: 'hidden' | 'unaffordable' | 'owned' | 'maxed'; readonly upgradeId: UpgradeId }
 
+export type MedalPurchaseResult =
+  | { readonly kind: 'purchased'; readonly upgradeId: MedalUpgradeId; readonly cost: Decimal }
+  | { readonly kind: 'unaffordable' | 'owned'; readonly upgradeId: MedalUpgradeId }
+
 export interface GameSimulationOptions {
   readonly targetRandom?: () => number
   readonly criticalRandom?: () => number
   readonly initialPoints?: Decimal | number | string
+  readonly initialMedals?: Decimal | number | string
+  readonly initialLifetimeMedals?: Decimal | number | string
 }
 
 export class GameSimulation {
   private runState: RunState = createIdleState()
   private currentPoints: Decimal
   private totalPoints: Decimal
+  private currentMedals: Decimal
+  private totalMedals: Decimal
   private readonly upgradeLevels: Record<UpgradeId, number> = { ...EMPTY_UPGRADE_LEVELS }
+  private readonly medalUpgradeLevels: Record<MedalUpgradeId, number> = {
+    ...EMPTY_MEDAL_UPGRADE_LEVELS,
+  }
   private readonly targetRandom: () => number
   private readonly criticalRandom: () => number
 
@@ -90,6 +112,8 @@ export class GameSimulation {
     this.criticalRandom = options.criticalRandom ?? Math.random
     this.currentPoints = new Decimal(options.initialPoints ?? 0)
     this.totalPoints = new Decimal(options.initialPoints ?? 0)
+    this.currentMedals = new Decimal(options.initialMedals ?? 0)
+    this.totalMedals = new Decimal(options.initialLifetimeMedals ?? options.initialMedals ?? 0)
   }
 
   public tick(deltaSeconds: number, now = 0): GameTickResult | null {
@@ -100,6 +124,7 @@ export class GameSimulation {
       now,
       this.targetRandom,
       this.runModifiers(),
+      this.rollCriticalTarget,
     )
     this.runState = transition.state
     if (
@@ -114,27 +139,43 @@ export class GameSimulation {
 
   public activate(now: number): GameActivationResult {
     const targetBasePoints = this.nextTargetBasePoints()
+    const targetCritical = this.runState.kind === 'active' && this.runState.targetCritical
     const transition = activateRun(
       this.runState,
       now,
       this.targetRandom,
       this.runModifiers(),
       targetBasePoints,
+      this.rollCriticalTarget,
     )
     this.runState = transition.state
-    return this.resolveActivation(transition, targetBasePoints)
+    return this.resolveActivation(transition, targetBasePoints, targetCritical)
   }
 
   public purchase(upgradeId: UpgradeId): PurchaseResult {
     const snapshotLevels = this.snapshotLevels()
-    const quote = quoteUpgrade(upgradeId, snapshotLevels, this.totalPoints, this.currentPoints)
+    const quote = quoteUpgrade(
+      upgradeId,
+      snapshotLevels,
+      this.totalPoints,
+      this.currentPoints,
+      this.medalUpgradeLevels,
+    )
     if (quote.status !== 'available') return { kind: quote.status, upgradeId }
     this.currentPoints = this.currentPoints.minus(quote.cost)
     this.upgradeLevels[upgradeId] = quote.level + 1
     if (upgradeId === 'miss-allowance' && this.runState.kind === 'active') {
-      this.runState = { ...this.runState, missesRemaining: 1 }
+      this.runState = { ...this.runState, missesRemaining: this.runState.missesRemaining + 1 }
     }
     return { kind: 'purchased', upgradeId, cost: quote.cost }
+  }
+
+  public purchaseMedalUpgrade(upgradeId: MedalUpgradeId): MedalPurchaseResult {
+    const quote = quoteMedalUpgrade(upgradeId, this.medalUpgradeLevels, this.currentMedals)
+    if (quote.status !== 'available') return { kind: quote.status, upgradeId }
+    this.currentMedals = this.currentMedals.minus(quote.definition.cost)
+    this.medalUpgradeLevels[upgradeId] = quote.level + 1
+    return { kind: 'purchased', upgradeId, cost: new Decimal(quote.definition.cost) }
   }
 
   public getRunState(): RunState {
@@ -147,19 +188,21 @@ export class GameSimulation {
       run: this.runState,
       points: new Decimal(this.currentPoints),
       lifetimePoints: new Decimal(this.totalPoints),
+      medals: new Decimal(this.currentMedals),
+      lifetimeMedals: new Decimal(this.totalMedals),
       upgrades: levels,
+      medalUpgrades: { ...this.medalUpgradeLevels },
     }
   }
 
   private resolveActivation(
     transition: ActivationTransition,
     targetBasePoints: Decimal,
+    critical: boolean,
   ): GameActivationResult {
     if (transition.kind !== 'hit' && transition.kind !== 'completed') {
       return { ...transition, reward: new Decimal(0) }
     }
-    const chance = criticalChance(this.snapshotLevels())
-    const critical = chance > 0 && this.criticalRandom() < chance
     const targetReward = critical
       ? targetBasePoints.times(CRITICAL_REWARD_MULTIPLIER)
       : targetBasePoints
@@ -169,7 +212,10 @@ export class GameSimulation {
     this.currentPoints = this.currentPoints.plus(reward)
     this.totalPoints = this.totalPoints.plus(reward)
     if (transition.kind === 'completed') {
-      return { ...transition, reward, targetReward, completionBonus, critical }
+      const medalsAwarded = new Decimal(transition.state.medalsAwarded)
+      this.currentMedals = this.currentMedals.plus(medalsAwarded)
+      this.totalMedals = this.totalMedals.plus(medalsAwarded)
+      return { ...transition, reward, targetReward, completionBonus, medalsAwarded, critical }
     }
     return { ...transition, reward, critical }
   }
@@ -180,10 +226,16 @@ export class GameSimulation {
     return targetValueMultiplier(levels['target-value'])
       .times(consecutiveMultiplier(consecutiveHits, levels['consecutive-value'] > 0))
       .times(pointGainMultiplier(levels))
+      .times(medalPointGainMultiplier(this.medalUpgradeLevels))
+  }
+
+  private readonly rollCriticalTarget = (): boolean => {
+    const chance = criticalChance(this.upgradeLevels)
+    return chance > 0 && this.criticalRandom() < chance
   }
 
   private runModifiers(): RunModifiers {
-    return runModifiersForUpgrades(this.upgradeLevels)
+    return runModifiersForUpgrades(this.upgradeLevels, this.medalUpgradeLevels)
   }
 
   private snapshotLevels(): UpgradeLevels {

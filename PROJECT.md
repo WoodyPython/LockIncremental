@@ -43,7 +43,7 @@ Failure should feel immediate but not punitive. Preserve the missed target durin
 
 ### Completion
 
-Completion awards the calculated reward once, updates lifetime progress, shows a distinct gold `Jackpot!` celebration with the bonus separated from the final target's normal `+1`, and advances any completed goals. Completion has no replay cooldown.
+Completion awards the calculated reward and one Medal exactly once, updates lifetime progress, shows a distinct three-second gold `Jackpot!` celebration with the Point bonus and Medal separated from the final target's normal `+1`, and advances any completed goals. Completion has no replay cooldown.
 
 ## 4. Initial Scope
 
@@ -55,6 +55,7 @@ Completion awards the calculated reward once, updates lifetime progress, shows a
 - Initial run requirement of 50 hits
 - Mouse, touch, Space, and Enter controls
 - Current Points and lifetime Points total
+- Current Medals and lifetime Medals total after the first Jackpot
 - At least one basic upgrade or progression hook, even if early balancing is provisional
 - Goal progress bar and version label at the bottom
 - Manual save
@@ -160,11 +161,13 @@ On load, default to idle. This avoids ambiguous scoring after a refresh.
 
 The initial economy is based on one Point per successful target and a completion bonus equal to 25% of the run's accumulated pre-critical target value. Base upgrades are:
 
-- Repeatable Target Value levels cost `5 × 1.5^level`, rounded to the nearest integer, and add 25% target value per level.
-- On completion of the first progression goal (100 lifetime Points), reveal all one-time upgrades together: 1.05× consecutive-target scaling (50), Critical Hits (100), a three-second failure cooldown (150), 20% lower per-hit speed scaling (150), 2× all Point gains (250), and one forgiven miss per run (500). Feature unlocks reference goal IDs rather than duplicating numeric thresholds.
-- Critical Hits begin at 2% chance and award 5× target Points. Repeatable critical-chance levels cost `25 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
+- Repeatable Target Value levels cost `3 × 1.4^level`, rounded to the nearest integer, and add 25% target value per level.
+- On completion of the first progression goal (100 lifetime Points), reveal all one-time upgrades together: 1.05× consecutive-target scaling (100), Critical Hits (100), a three-second failure cooldown (250), 2× all Point gains (500), 20% lower per-hit speed scaling (1,000), and one forgiven miss per run (2,500). Feature unlocks reference goal IDs rather than duplicating numeric thresholds.
+- Critical Hits begin at 2% chance and award 5× target Points. Critical status is rolled when each target spawns; critical targets stay gold with a sparkling effect until resolved, making the bonus visible before the hit. Repeatable critical-chance levels cost `20 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
 - A forgiven miss awards no Points, does not advance successful-hit progress, resets the consecutive multiplier, relocates the target, reverses direction, and grants 200ms of input/pass invulnerability.
-- Goals first track 100 lifetime Points and then 1,000 lifetime Points.
+- The first Jackpot reveals a gold Medal shop and awards one Medal. Its fixed one-per-row order is Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). These upgrades respectively add a stacking 2× Point multiplier, up to 50% additive target size, up to ten fewer required targets, one additive forgiven miss, and a recorded WIP Research unlock.
+- Shorter Jackpot reveals Rapid Recovery (10,000 Points), which halves the effective failure cooldown, and Efficient Scaling (25,000), which reduces the growth portion of repeatable cost bases by 25%.
+- Goals track 100, 10,000, and 1,000,000 lifetime Points in order.
 
 All economy values must be data-driven and use `Decimal` where growth can become large.
 
@@ -185,7 +188,7 @@ Centered persistent tab navigation with Main and Settings appears at the top wit
 
 ### Center
 
-The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center. Points appear below the lock and immediately above a horizontal divider and the upgrade cards. Upgrades fade in only once when their progression goal is first reached. Purchased one-time cards remain visible with their completed state. Cards are initially placed in increasing base-cost order and never reorder during play.
+The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center. The resource row uses amount-first labels (`X Points`), and reveals gold Medals beside Points after the first Jackpot. The Medal shop smoothly appears to the right of the normal upgrades behind a vertical divider; on mobile it stacks below a horizontal divider. Upgrades fade in only once when their progression goal is first reached. Purchased cards remain visible with their completed state. Cards are initially placed in increasing base-cost order and never reorder during play.
 
 The Settings tab contains save/import/export controls, autosave controls, and tab-notification controls. It does not contain offline-progress, Discord, or support controls.
 
