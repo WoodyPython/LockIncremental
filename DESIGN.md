@@ -4,35 +4,20 @@
 
 Create a browser-based incremental game whose active play is based on the core timing loop of the arcade game **Pop the Lock**. The presentation should resemble established incremental games: a persistent top tab bar, a central gameplay area, a compact settings screen, and a fixed footer containing version and goal progress.
 
-The visual direction is deliberately simple rather than decorative. Use flat shapes, strong contrast, large readable numbers, and one consistent vibrant theme. Do not use the teal/blue palette shown in the references.
+The visual direction is deliberately simple rather than decorative. Use flat shapes, strong contrast, large readable numbers, and a small set of cohesive selectable themes.
 
 ## 2. Visual Theme
 
-Use a single warm, high-contrast theme throughout the entire game.
+Provide four high-contrast themes selectable from Settings:
 
-### Required palette
+- **Ocean:** teal surfaces with gold and aqua highlights; the default.
+- **Ember:** charcoal and warm brown surfaces with orange highlights.
+- **Forest:** deep green surfaces with cream and amber highlights.
+- **Monochrome:** slate surfaces with white and pale blue highlights.
 
-Define all colors as CSS custom properties and use no untracked color literals in components.
+### Required palette system
 
-```css
-:root {
-  --color-bg: #2a1538;
-  --color-surface: #3b1d50;
-  --color-surface-raised: #4b2564;
-  --color-border: #160b20;
-  --color-text: #fff7df;
-  --color-text-muted: #d9c6df;
-  --color-primary: #ff8a3d;
-  --color-primary-hover: #ffa15f;
-  --color-accent: #d8ff4f;
-  --color-danger: #ff3f55;
-  --color-danger-dark: #8f1425;
-  --color-success: #5cff9d;
-  --color-shadow: rgba(10, 4, 16, 0.45);
-}
-```
-
-Small adjustments for contrast are acceptable, but the theme must remain warm purple/orange/lime and must not drift toward blue or teal.
+Define all theme colors as the shared CSS custom properties in `src/styles/tokens.css`; use no untracked color literals in components. Switching themes must update the entire interface consistently without reloading the page.
 
 ### General styling constraints
 
@@ -41,7 +26,7 @@ Small adjustments for contrast are acceptable, but the theme must remain warm pu
 - Minimal shadows; use them only to separate active or focused elements.
 - No gradients unless used briefly as part of a win/loss animation.
 - No glassmorphism, realistic textures, or complex backgrounds.
-- Do not mix visual themes between screens.
+- Apply the selected theme consistently across every screen.
 - Use one sans-serif display font from the system stack; do not require externally hosted fonts.
 - All interactive controls need visible hover, active, focus-visible, and disabled states.
 - The layout must work at desktop and mobile widths.
@@ -58,7 +43,9 @@ The application should fill the viewport without causing routine page scrolling 
 
 ## 4. Top Navigation
 
-A persistent tab bar appears at the top of every screen.
+Persistent tabs appear centered at the top of every screen without a full-width containing bar.
+
+Reserve a small amount of space above the header, show primary currency first, then draw a separator matching the bottom progress bar's horizontal bounds. Place wide, compact-height tabs below the separator. Do not repeat the game title in this top area.
 
 ### Initial tabs
 
@@ -69,7 +56,7 @@ Additional progression tabs may be introduced later, but they must use the same 
 
 ### Tab behavior
 
-- The active tab has a strong filled state using `--color-primary` or `--color-accent` with dark readable text.
+- The active tab has a strong dark filled state with readable text.
 - Inactive tabs use `--color-surface` and light text.
 - Changing tabs must not reload the page.
 - Tab state does not need to be encoded in the URL for the initial version.
@@ -94,12 +81,13 @@ The Main screen contains the active lock game and incremental-game readouts.
 Desktop:
 
 - A centered lock game occupies the primary visual area.
-- Current run information appears near the lock.
-- Core resources and rates appear in a compact header or side panel without overwhelming the lock.
+- Current run score appears in the center of the lock.
+- Primary currency appears in the top status area above the navigation separator.
+- Upgrade sections remain hidden until progression unlocks them.
 
 Mobile:
 
-- Resource readouts appear above the lock.
+- Primary currency remains in the top status area.
 - The lock scales to fit the width while remaining circular.
 - Controls remain large enough for touch input.
 
@@ -107,10 +95,9 @@ Mobile:
 
 At minimum, show:
 
-- Current primary currency
-- Current run progress, such as `7 / 20`
-- Current reward or multiplier when relevant
-- A clear idle prompt before a run begins
+- Current primary currency above the navigation separator
+- Current run score and requirement centered inside the lock, such as `7 / 20`
+- A large `Click to Play` idle/restart prompt
 
 Use the shared big-number formatting utilities for resource values. Run hit counts may remain ordinary integers.
 
@@ -121,7 +108,7 @@ Use an HTML `<canvas>` for the lock, rotating marker, target, hit effects, and l
 ### Lock elements
 
 - Circular lock ring
-- Rotating marker or bar traveling around the ring
+- Radial rotating bar inside the lock ring
 - Clearly visible target marker positioned on the ring
 - Central text showing idle instructions, run progress, or result feedback
 - Optional small particles or rings for successful hits
@@ -147,7 +134,9 @@ The mechanic should follow the recognizable Pop the Lock timing loop:
 4. A successful activation increments run progress.
 5. After a success, a new target is selected and the marker reverses direction.
 6. An activation outside the accepted hit window ends the run.
-7. The run succeeds after the required number of targets has been hit.
+7. Allowing the entire bar to pass the target also ends the run automatically.
+8. Each hit increases marker speed and decreases the possible distance to the next target.
+9. The run succeeds after the required number of targets has been hit.
 
 Initial required hit count: **20**.
 
@@ -165,10 +154,13 @@ Prevent duplicate scoring from the same physical interaction. Pointer input shou
 ### Hit detection
 
 - Perform hit detection using angular distance rather than pixel collision.
-- The accepted target window must be defined by a named gameplay constant.
+- Count a hit whenever any angular portion of the bar overlaps any angular portion of the target.
+- Define target arc half-width, rounded target-cap width, and outlined bar half-width as named gameplay constants; their sum is the accepted center-distance window so visible outline contact always counts.
 - Visual target width and logical hit width should correspond closely.
+- Give the bar and target black outlines, and use a target color that is clearly distinct from the ring and surrounding theme colors.
 - Avoid frame-rate-dependent hit detection.
 - Normalize angular calculations so crossing `0` radians behaves correctly.
+- Detect crossing the target's trailing edge between frames so a passed target cannot be skipped at high speed.
 
 ### Successful hit feedback
 
@@ -176,6 +168,8 @@ A successful hit should produce brief, restrained feedback:
 
 - Target flashes with `--color-success` or `--color-accent`.
 - A small expanding ring or particle burst may appear.
+- Display a fading `+currency` gain label near the target that was hit.
+- On the final target, keep this label at the normal per-target `+1`; present the separate completion bonus only on the win screen.
 - The progress number updates immediately.
 - The direction reversal should be visually obvious but not jarring.
 - Sound may be added later but is not required for the initial implementation.
@@ -188,8 +182,9 @@ On a miss:
 - Flash the ring and/or background using `--color-danger`.
 - Briefly shake, squash, or pulse the lock.
 - Freeze the marker for a short result beat.
-- Display a clear failure label and the achieved progress.
-- Transition back to idle after a short delay or after a deliberate restart input.
+- Keep the missed target visible throughout the cooldown so the player can compare the final bar position with the target.
+- Display the cooldown countdown as large red text in the center of the lock without a separate failure label.
+- After the cooldown, return the ring to its normal color, resume the bar at default idle speed, and replace the countdown with a large `Click to Play` prompt.
 
 The loss animation must not be a rapid screen flash. Respect reduced-motion preferences by replacing movement with a static color change.
 
@@ -198,10 +193,10 @@ The loss animation must not be a rapid screen flash. Respect reduced-motion pref
 On completing all 20 hits:
 
 - Stop active input.
-- Show a clear completion state.
+- Show a clear gold `Jackpot!` state that cannot be confused with failure, with the completion bonus displayed beneath the heading.
 - Award the run reward exactly once.
-- Use a success pulse or outward ring animation.
-- Return to idle after a brief result state.
+- Use gold particles, an outward ring, or a comparable celebratory animation.
+- Do not apply the failure cooldown; allow immediate replay input and otherwise return to idle after the brief celebration.
 
 ### Animation timing
 
@@ -210,6 +205,10 @@ Use `requestAnimationFrame` and delta time for rendering and movement. Cap unusu
 ## 7. Settings Screen
 
 The Settings screen should mirror the compact, button-driven style common to incremental games while using the project theme.
+
+### Theme controls
+
+Show buttons for Ocean, Ember, Forest, and Monochrome. Apply the selected theme immediately. Theme persistence will follow the same save/settings lifecycle when persistence is implemented.
 
 ### Save controls
 
@@ -269,11 +268,13 @@ When enabled, eligible inactive tabs may receive the red attention outline descr
 
 A compact status area is fixed or anchored to the bottom of the application.
 
+Center the version label immediately above a nearly full-width dark progress track. Place the goal text over the track itself, following the compact incremental-game reference layout rather than a multi-column footer.
+
 ### Version label
 
 Display the game name and semantic version, for example:
 
-`Lock Incremental v0.1.0`
+`Lock Incremental v0.1.0 by WoodyPython`
 
 Keep the version in one source of truth and inject or import it where displayed.
 
@@ -297,6 +298,7 @@ Constraints:
 - Clamp visual progress between 0% and 100%.
 - Calculate values with `break_infinity.js` where they can exceed normal numeric limits.
 - The bar must remain legible on narrow screens.
+- Use a dark green progress track/fill and give overlaid goal text a complete black outline for readability.
 - Once a goal is completed, transition to the next configured goal without losing previously earned progress.
 - Goal definitions belong in game data, not hard-coded DOM logic.
 
@@ -314,6 +316,7 @@ Constraints:
 - Maintain sufficient text/background contrast.
 - All controls must be keyboard reachable.
 - The canvas must have an accessible name and keyboard equivalent.
+- Pointer activation must not leave a selection/tap highlight or focus outline on the canvas; keyboard focus must remain visibly indicated when reached through keyboard navigation.
 - Do not rely on color alone for success, failure, selection, or notification.
 - Use an `aria-live="polite"` region for save results, imports, run completion, and failure summaries.
 - Honor `prefers-reduced-motion`.
@@ -326,6 +329,5 @@ Constraints:
 - Server-authoritative leaderboards
 - Multiplayer
 - Discord or support links
-- Multiple color themes
 - React, Vue, or another UI framework
 - Elaborate story, character art, or 3D rendering

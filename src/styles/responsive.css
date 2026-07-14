@@ -1,0 +1,33 @@
+@media (max-width: 640px) {
+  .tabs {
+    overflow-x: auto;
+  }
+
+  main {
+    padding: 10px 12px 16px;
+  }
+
+  .lock-canvas {
+    width: 100%;
+  }
+
+  .upgrade-grid,
+  .theme-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-footer {
+    position: static;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -30,18 +30,20 @@ The lock marker spins continuously as a visual attract state. The player clicks 
 3. The player clicks, taps, or presses Space when marker and target overlap.
 4. On success, progress increases by one.
 5. The target relocates and rotation reverses.
-6. On a miss, the run ends without completion rewards.
+6. On an early input or when the rotating bar passes the target, the run ends without completion rewards.
 7. At 20 successful hits, the run completes and awards currency.
+
+Each successful target increases the marker speed and reduces the placement distance for later targets, so longer runs demand faster reactions and more precise perception.
 
 The exact movement speed, hit-window size, target placement constraints, and reward formula are balance data and should not be embedded in rendering code.
 
 ### Failure
 
-Failure should feel immediate but not punitive. Show a short red failure animation, report the achieved hit count, and return the lock to an obvious restartable state.
+Failure should feel immediate but not punitive. Preserve the missed target during a five-second red cooldown so the player can see the timing error. When the cooldown ends, automatically restore the normal ring, resume the idle marker spin, and show `Click to Play`.
 
 ### Completion
 
-Completion awards the calculated reward once, updates lifetime progress, shows a short success animation, and advances any completed goals.
+Completion awards the calculated reward once, updates lifetime progress, shows a distinct gold `Jackpot!` celebration with the bonus separated from the final target's normal `+1`, and advances any completed goals. Completion has no replay cooldown.
 
 ## 4. Initial Scope
 
@@ -63,6 +65,7 @@ Completion awards the calculated reward once, updates lifetime progress, shows a
 - Import from file
 - Wipe save with two-step confirmation
 - Optional tab-notification setting and reusable red tab highlight
+- Selectable Ocean, Ember, Forest, and Monochrome themes
 - Responsive desktop and mobile layout
 - Save schema versioning and migration infrastructure
 
@@ -75,7 +78,6 @@ Completion awards the calculated reward once, updates lifetime progress, shows a
 - Multiplayer
 - Backend services
 - Discord and support buttons
-- Multiple themes
 - Mobile native application packaging
 
 ## 5. Suggested Technology Stack
@@ -85,7 +87,7 @@ Completion awards the calculated reward once, updates lifetime progress, shows a
 - **Vite** as the development server and production build tool
 - **Vanilla TypeScript** for game logic and UI behavior
 - **HTML** for semantic application structure
-- **CSS** for layout, responsive styling, animation, and the single theme
+- **CSS** for layout, responsive styling, animation, and token-driven themes
 - **Canvas 2D API** for the lock and gameplay effects
 
 A component framework is intentionally omitted. The project has a small number of screens, and its central interaction is a custom animation loop rather than a large data-driven application UI.
@@ -179,11 +181,11 @@ Potential future systems, not required initially:
 
 ### Top
 
-Persistent tab navigation with Main and Settings. The active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
+Primary currency appears at the top above a bounded separator. Centered persistent tab navigation with Main and Settings sits below the separator without a surrounding navigation bar, and the active tab is visually distinct. Eligible inactive tabs can receive a red notification outline when the setting is enabled.
 
 ### Center
 
-The Main tab focuses on the circular lock. Resource readouts and run information remain compact and secondary to the timing interaction.
+The Main tab focuses on the circular lock. Run score and the completion requirement appear in its center, while primary currency appears above the navigation separator. Upgrade sections remain hidden until progression unlocks them.
 
 The Settings tab contains save/import/export controls, autosave controls, and tab-notification controls. It does not contain offline-progress, Discord, or support controls.
 
