@@ -64,6 +64,7 @@ export class UpgradesView {
   private readonly sections = new Map<UpgradeKind, HTMLElement>()
   private readonly medalSection: HTMLElement
   private readonly revealed = new Set<UpgradeId>(['target-value'])
+  private initialized = false
   private readonly unlockCleanupTimers = new Map<UpgradeId, number>()
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -84,6 +85,7 @@ export class UpgradesView {
   }
 
   public update(snapshot: GameSnapshot): void {
+    const initialUpdate = !this.initialized
     const medalShopUnlocked = snapshot.lifetimeMedals.gte(1)
     this.element.classList.toggle('is-medal-unlocked', medalShopUnlocked)
     this.medalSection.setAttribute('aria-hidden', String(!medalShopUnlocked))
@@ -104,7 +106,9 @@ export class UpgradesView {
       const visible =
         unlocked && (definition.kind === 'multi-buy' || visibleOneTimeIds.has(definition.id))
       elements.card.hidden = !visible
-      if (visible && !this.revealed.has(definition.id)) {
+      if (initialUpdate && visible) {
+        this.revealed.add(definition.id)
+      } else if (visible && !this.revealed.has(definition.id)) {
         this.revealCard(definition.id, elements.card)
       }
 
@@ -131,6 +135,8 @@ export class UpgradesView {
         `${definition.name}: ${elements.button.textContent}`,
       )
     }
+
+    this.initialized = true
 
     for (const section of this.sections.values()) {
       section.hidden = !Array.from(section.querySelectorAll<HTMLElement>('.upgrade-card')).some(

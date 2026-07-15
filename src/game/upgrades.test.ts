@@ -105,7 +105,7 @@ describe('upgrade definitions and purchases', () => {
     expect(targetValueMultiplier(3).eq(1.75)).toBe(true)
     expect(consecutiveMultiplier(2, true).eq(1.1025)).toBe(true)
     expect(pointGainMultiplier({ ...EMPTY_UPGRADE_LEVELS, 'double-points': 1 }).eq(2)).toBe(true)
-    expect(criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1 })).toBe(0.02)
+    expect(criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1 })).toBe(0.03)
     expect(
       criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1, 'critical-chance': 500 }),
     ).toBe(1)

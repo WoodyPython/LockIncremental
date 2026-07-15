@@ -55,6 +55,14 @@
     gap: 8px;
   }
 
+  .progression-layout.is-medal-unlocked::after {
+    content: none;
+  }
+
+  .progression-resources.has-medals .progression-medals {
+    border-left: var(--border-width) solid var(--color-border);
+  }
+
   .medal-upgrades {
     max-height: 0;
     padding-top: 0;

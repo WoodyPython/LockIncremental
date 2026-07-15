@@ -2,7 +2,7 @@ export const REQUIRED_HITS = 50
 export const IDLE_SPEED_RADIANS_PER_SECOND = 0.8
 export const ACTIVE_BASE_SPEED_RADIANS_PER_SECOND = 2
 export const ACTIVE_SPEED_INCREASE_PER_HIT = 0.075
-export const TARGET_HALF_WIDTH_RADIANS = 0.07
+export const TARGET_HALF_WIDTH_RADIANS = 0.14
 // Rounded stroke caps and black outlines are visible parts of both shapes and
 // therefore count as contact. These values cover the responsive renderer's
 // maximum cap width at the minimum supported canvas size.
@@ -16,7 +16,7 @@ export const INITIAL_MAX_TARGET_TRAVEL_RADIANS = (3 * Math.PI) / 2
 export const FINAL_MAX_TARGET_TRAVEL_RADIANS = Math.PI
 export const MAX_FRAME_DELTA_SECONDS = 0.1
 export const RESULT_COOLDOWN_MS = 5_000
-export const SHIELD_INVULNERABILITY_MS = 200
+export const SHIELD_RECOVERY_MS = 1_000
 export const COMPLETION_CELEBRATION_MS = 3_000
 export const COMPLETION_BONUS_RATE = 0.25
 export const JACKPOT_MEDAL_REWARD = 1

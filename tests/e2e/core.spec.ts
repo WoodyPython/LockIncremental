@@ -4,7 +4,7 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('/')
 
-  await expect(page.getByText('Lock Incremental v0.1.0 by WoodyPython')).toBeVisible()
+  await expect(page.getByText('Lock Incremental v0.1.1 by WoodyPython')).toBeVisible()
   await expect(page.getByText('Points', { exact: true })).toBeVisible()
   await expect(page.locator('.progression-points')).toContainText(/0\s*Points/)
   await expect(page.getByText('Medal Upgrades')).toBeHidden()
@@ -27,6 +27,22 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await expect(page.getByText('One-time Upgrades')).toHaveCount(0)
   await expect(page.getByText(/Earn 100 lifetime Points/)).toBeVisible()
   await expect(page.locator('.status-footer')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(page.locator('.status-footer')).toHaveCSS('padding-bottom', '10px')
+  await expect(page.locator('.version')).toHaveCSS('color', 'rgb(245, 255, 254)')
+  await expect(page.locator('.version')).toHaveCSS('font-size', '14.4px')
+  await expect(page.locator('.version')).not.toHaveCSS('text-shadow', 'none')
+  await expect(page.locator('.goal-track')).toHaveCSS('background-color', 'rgb(36, 38, 38)')
+  await expect(page.locator('.goal-track')).toHaveCSS('height', '42px')
+  await expect(page.locator('.goal-track')).toHaveCSS('border-color', 'rgb(5, 5, 5)')
+  await expect(page.locator('.goal-track')).toHaveCSS('box-shadow', 'none')
+  await expect(page.locator('.goal-fill')).toHaveCSS('background-color', 'rgb(18, 134, 64)')
+  await expect(page.locator('.goal-copy')).toHaveCSS('font-weight', '400')
+  await expect(page.locator('.goal-copy')).toHaveCSS('padding-left', '14px')
+  expect(
+    await page
+      .locator('.goal-copy')
+      .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize)),
+  ).toBeGreaterThan(12.32)
   await expect(page.locator('[data-medal-upgrades]')).toHaveCSS('height', '0px')
   const visibleContentBottom = await page
     .locator('[data-upgrade-id="target-value"]')
@@ -238,10 +254,42 @@ test('cleans up upgrade reveal animation before later tab changes', async ({ pag
   await expect(card).not.toHaveClass(/is-unlocking/)
 })
 
+test('does not replay unlocked Point upgrade reveals after a page reload', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'lock-incremental:save',
+      JSON.stringify({
+        version: 3,
+        savedAt: new Date().toISOString(),
+        game: { points: '100', lifetimePoints: '100' },
+        settings: {},
+      }),
+    )
+  })
+  await page.goto('/')
+
+  const unlockedCards = page.locator('[data-upgrade-kind="one-time"] .upgrade-card:not([hidden])')
+  await expect(unlockedCards).toHaveCount(6)
+  expect(
+    await unlockedCards.evaluateAll((cards) =>
+      cards.every((card) => !card.classList.contains('is-unlocking')),
+    ),
+  ).toBe(true)
+
+  await page.reload()
+  await expect(unlockedCards).toHaveCount(6)
+  expect(
+    await unlockedCards.evaluateAll((cards) =>
+      cards.every((card) => !card.classList.contains('is-unlocking')),
+    ),
+  ).toBe(true)
+})
+
 test('defines a smooth Medal shop reveal with a mobile divider fallback', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 800 })
   await page.goto('/')
   const layout = page.locator('.upgrades-layout')
+  const progressionLayout = page.locator('.progression-layout')
   const resources = page.locator('.progression-resources')
   const medalShop = page.locator('[data-medal-upgrades]')
   await expect(layout).not.toHaveClass(/is-medal-unlocked/)
@@ -252,6 +300,9 @@ test('defines a smooth Medal shop reveal with a mobile divider fallback', async 
   await resources.evaluate((element) => {
     element.classList.add('has-medals')
   })
+  await progressionLayout.evaluate((element) => {
+    element.classList.add('is-medal-unlocked')
+  })
   await page.locator('[data-upgrade-kind="one-time"]').evaluate((section) => {
     section.removeAttribute('hidden')
     for (const card of section.querySelectorAll<HTMLElement>('.upgrade-card')) {
@@ -259,8 +310,34 @@ test('defines a smooth Medal shop reveal with a mobile divider fallback', async 
     }
   })
   await expect(medalShop).toHaveCSS('visibility', 'visible')
-  await expect(medalShop).toHaveCSS('border-left-style', 'solid')
+  await expect(medalShop).toHaveCSS('border-left-width', '0px')
   await page.waitForTimeout(550)
+
+  const dividerContinuity = await page.evaluate(() => {
+    const medals = document.querySelector<HTMLElement>('.progression-medals')
+    const progression = document.querySelector<HTMLElement>('.progression-layout')
+    const shop = document.querySelector<HTMLElement>('.medal-upgrades')
+    if (medals === null || progression === null || shop === null) {
+      throw new Error('Missing Medal divider elements')
+    }
+    const medalsBox = medals.getBoundingClientRect()
+    const progressionBox = progression.getBoundingClientRect()
+    const shopBox = shop.getBoundingClientRect()
+    const divider = getComputedStyle(progression, '::after')
+    const dividerX = progressionBox.left + Number.parseFloat(divider.left)
+    const dividerTop = progressionBox.top + Number.parseFloat(divider.top)
+    const dividerBottom = progressionBox.bottom - Number.parseFloat(divider.bottom)
+    return {
+      resourceXGap: Math.abs(dividerX - medalsBox.left),
+      shopXGap: Math.abs(dividerX - shopBox.left),
+      topGap: Math.abs(dividerTop - medalsBox.top),
+      bottomGap: Math.abs(dividerBottom - shopBox.bottom),
+    }
+  })
+  expect(dividerContinuity.resourceXGap).toBeLessThan(1)
+  expect(dividerContinuity.shopXGap).toBeLessThan(1)
+  expect(dividerContinuity.topGap).toBeLessThan(1)
+  expect(dividerContinuity.bottomGap).toBeLessThan(1)
 
   const medalOrder = await page.locator('[data-medal-upgrade-id]').evaluateAll((cards) =>
     cards.map((card) => ({
@@ -382,6 +459,28 @@ test('supports keyboard start, failure, and blocked cooldown input', async ({ pa
   await expect(live).toContainText('Run failed')
 })
 
+test('supports Space and Enter while the unfocused lock is hovered', async ({ page }) => {
+  await page.goto('/')
+  const lock = page.getByRole('button', { name: /Lock game/ })
+  const live = page.locator('[data-live]')
+
+  await lock.hover()
+  const mainTab = page.getByRole('tab', { name: 'Main' })
+  await mainTab.focus()
+  await page.keyboard.press('Space')
+  await expect(live).toHaveText('')
+  await mainTab.evaluate((element) => {
+    element.blur()
+  })
+  await expect(lock).not.toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(live).toContainText('Run started')
+  await expect(lock).not.toBeFocused()
+
+  await page.keyboard.press('Space')
+  await expect(live).toContainText('Run failed')
+})
+
 test('keeps a failure cooldown active across reloads', async ({ page }) => {
   await page.goto('/')
   let lock = page.getByRole('button', { name: /Lock game/ })
@@ -489,6 +588,11 @@ test('keeps the lock and upgrades fluid at mobile width', async ({ page }) => {
   if (lockBox === null) throw new Error('Expected lock')
   expect(lockBox.x + lockBox.width).toBeLessThanOrEqual(321)
   await expect(page.getByRole('heading', { name: 'Target Value' })).toBeVisible()
+  expect(
+    await page
+      .locator('.goal-copy')
+      .evaluate((element) => element.scrollWidth <= element.clientWidth),
+  ).toBe(true)
 })
 
 test('fails automatically when the bar passes an untouched target', async ({ page }) => {

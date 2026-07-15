@@ -258,7 +258,12 @@ export class LockRenderer {
     let heading: string
     let color = palette.text
     if (run.kind === 'active') {
-      heading = `${run.hits} / ${run.requiredHits}`
+      const shieldRemaining = Math.max(0, run.invulnerableUntil - now)
+      heading =
+        shieldRemaining > 0
+          ? `${Math.ceil(shieldRemaining)} ms`
+          : `${run.hits} / ${run.requiredHits}`
+      if (shieldRemaining > 0) color = palette.shield
     } else if (run.kind === 'idle') {
       heading = 'Click to Play'
     } else if (run.kind === 'completed') {
@@ -279,7 +284,15 @@ export class LockRenderer {
     if (run.kind === 'failed' && cooldownRemainingMs(run, now) > 0) {
       this.context.fillStyle = palette.muted
       this.context.font = `700 ${Math.max(12, size * 0.03)}px system-ui, sans-serif`
-      this.context.fillText('COOLDOWN', center, center + size * 0.09)
+      this.context.fillText(`SCORE ${run.hits} / ${run.requiredHits}`, center, center + size * 0.09)
+    } else if (run.kind === 'active' && now < run.invulnerableUntil) {
+      this.context.fillStyle = palette.muted
+      this.context.font = `700 ${Math.max(12, size * 0.03)}px system-ui, sans-serif`
+      this.context.fillText(
+        `SHIELDED · SCORE ${run.hits} / ${run.requiredHits}`,
+        center,
+        center + size * 0.09,
+      )
     } else if (run.kind === 'completed') {
       this.context.fillStyle = palette.goldLight
       this.context.font = `800 ${Math.max(15, size * 0.04)}px system-ui, sans-serif`

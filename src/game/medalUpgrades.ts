@@ -46,12 +46,12 @@ export const MEDAL_UPGRADE_DEFINITIONS: readonly MedalUpgradeDefinition[] = [
   {
     id: 'larger-targets',
     name: 'Larger Targets',
-    description: 'Increase target size by 25%.',
+    description: 'Increase target size by 50%.',
     cost: new Decimal(1),
   },
   {
     id: 'shorter-jackpot',
-    name: 'Shorter Jackpot',
+    name: 'Faster Jackpot',
     description: 'Reduce the Jackpot requirement by 5 targets and unlock two Point upgrades.',
     cost: new Decimal(2),
   },
@@ -64,7 +64,7 @@ export const MEDAL_UPGRADE_DEFINITIONS: readonly MedalUpgradeDefinition[] = [
   {
     id: 'jackpot-mastery',
     name: 'Jackpot Mastery',
-    description: 'Increase target size by 25% and reduce the Jackpot requirement by 5 targets.',
+    description: 'Increase target size by 50% and reduce the Jackpot requirement by 5 targets.',
     cost: new Decimal(5),
   },
   {
@@ -107,7 +107,7 @@ export function medalUpgradeDefinitionsByCost(): readonly MedalUpgradeDefinition
 export function medalTargetHalfWidth(levels: MedalUpgradeLevels): number {
   const sizeLevels =
     (levels['larger-targets'] > 0 ? 1 : 0) + (levels['jackpot-mastery'] > 0 ? 1 : 0)
-  return TARGET_HALF_WIDTH_RADIANS * (1 + sizeLevels * 0.25)
+  return TARGET_HALF_WIDTH_RADIANS * (1 + sizeLevels * 0.5)
 }
 
 export function medalRequiredHits(levels: MedalUpgradeLevels): number {

@@ -53,7 +53,7 @@ Completion awards the calculated reward and one Medal exactly once, updates life
 - Canvas-rendered circular lock game
 - Idle, active, failed, and completed run states
 - Initial run requirement of 50 hits
-- Mouse, touch, Space, and Enter controls
+- Mouse and touch controls, plus Space and Enter while the lock is focused or hovered
 - Current Points and lifetime Points total
 - Current Medals and lifetime Medals total after the first Jackpot
 - At least one basic upgrade or progression hook, even if early balancing is provisional
@@ -174,9 +174,9 @@ The initial economy is based on one Point per successful target and a completion
 
 - Repeatable Target Value levels cost `3 × 1.4^level`, rounded to the nearest integer, and add 25% target value per level.
 - On completion of the first progression goal (100 lifetime Points), reveal all one-time upgrades together: 1.05× consecutive-target scaling (100), Critical Hits (100), a three-second failure cooldown (250), 2× all Point gains (500), 20% lower per-hit speed scaling (1,000), and one forgiven miss per run (2,500). Feature unlocks reference goal IDs rather than duplicating numeric thresholds.
-- Critical Hits begin at 2% chance and award 5× target Points. Critical status is rolled when each target spawns; critical targets stay gold with a sparkling effect until resolved, making the bonus visible before the hit. Repeatable critical-chance levels cost `20 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
-- A forgiven miss awards no Points, does not advance successful-hit progress, resets the consecutive multiplier, relocates the target, reverses direction, and grants 200ms of input/pass invulnerability.
-- The first Jackpot reveals a gold Medal shop and awards one Medal. Its fixed one-per-row order is Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). These upgrades respectively add a stacking 2× Point multiplier, up to 50% additive target size, up to ten fewer required targets, one additive forgiven miss, and a recorded WIP Research unlock.
+- Critical Hits begin at 3% chance and award 10× target Points. Critical status is rolled when each target spawns; critical targets stay gold with a sparkling effect until resolved, making the bonus visible before the hit. Repeatable critical-chance levels cost `20 × 1.5^level`, rounded to the nearest integer, add 0.5 percentage points, and cap at 100%.
+- A forgiven miss awards no Points, does not advance successful-hit progress, resets the consecutive multiplier, relocates the target, reverses direction, and pauses play behind a one-second millisecond countdown before resuming.
+- The first Jackpot reveals a gold Medal shop and awards one Medal. Its fixed one-per-row order is Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). These upgrades respectively add a stacking 2× Point multiplier, up to 100% additive target size, up to ten fewer required targets, one additive forgiven miss, and a recorded WIP Research unlock.
 - Shorter Jackpot reveals Rapid Recovery (10,000 Points), which halves the effective failure cooldown, and Efficient Scaling (25,000), which reduces the growth portion of repeatable cost bases by 25%.
 - Goals track 100, 10,000, and 1,000,000 lifetime Points in order.
 

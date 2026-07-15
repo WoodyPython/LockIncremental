@@ -81,7 +81,7 @@ export function presentActivation(
 export function presentTick(
   result: GameTickResult,
   now: number,
-  missedTargetAngle: number | null,
+  failureAngle: number | null,
 ): GamePresentation {
   if (result.kind === 'passed-target') {
     const seconds = Math.round((result.state.cooldownEndsAt - now) / 1_000)
@@ -95,7 +95,7 @@ export function presentTick(
     return {
       announcement: 'Miss forgiven. The consecutive multiplier was reset.',
       effect: 'forgiven',
-      shieldAngle: missedTargetAngle ?? undefined,
+      shieldAngle: failureAngle ?? undefined,
       economyChanged: false,
     }
   }

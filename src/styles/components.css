@@ -23,6 +23,22 @@
   justify-content: center;
 }
 
+.progression-layout {
+  position: relative;
+  display: flow-root;
+}
+
+.progression-layout.is-medal-unlocked::after {
+  position: absolute;
+  top: 24px;
+  bottom: 0;
+  left: calc(50% + 12px);
+  width: var(--border-width);
+  background: var(--color-border);
+  content: '';
+  pointer-events: none;
+}
+
 .progression-resources {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0fr);
@@ -61,7 +77,6 @@
   overflow: hidden;
   padding-left: 0;
   margin-left: 0;
-  border-left: var(--border-width) solid transparent;
   opacity: 0;
   white-space: nowrap;
   transform: translateX(-10px);
@@ -69,7 +84,6 @@
     max-width 500ms ease-out,
     padding-left 500ms ease-out,
     margin-left 500ms ease-out,
-    border-color 350ms ease-out,
     opacity 350ms ease-out,
     transform 500ms ease-out;
 }
@@ -79,7 +93,6 @@
   max-width: none;
   padding-left: 18px;
   margin-left: 0;
-  border-left-color: var(--color-border);
   opacity: 1;
   transform: translateX(0);
 }
@@ -94,6 +107,7 @@
 }
 
 .progression-separator {
+  position: relative;
   width: 100%;
   height: var(--border-width);
   margin-top: 10px;
@@ -202,13 +216,11 @@ main.is-medal-layout {
   min-width: 0;
   overflow: hidden;
   padding-left: 0;
-  border-left: var(--border-width) solid transparent;
   opacity: 0;
   transform: translateX(-14px);
   visibility: hidden;
   transition:
     padding-left 500ms ease-out,
-    border-color 350ms ease-out,
     opacity 350ms ease-out,
     transform 500ms ease-out,
     visibility 0s linear 500ms;
@@ -219,7 +231,6 @@ main.is-medal-layout {
   padding-left: 24px;
   padding-right: 3px;
   padding-bottom: 3px;
-  border-left-color: var(--color-border);
   opacity: 1;
   transform: translateX(0);
   visibility: visible;
@@ -551,14 +562,14 @@ main:has(.settings-panel:not([hidden])) {
   position: sticky;
   bottom: 0;
   z-index: 9;
-  padding: 0 10px 8px;
+  padding: 0 10px 10px;
   text-align: center;
 }
 
 .version {
   margin-bottom: 4px;
   color: var(--color-text);
-  font-size: 0.74rem;
+  font-size: 0.9rem;
   font-weight: 700;
   text-shadow:
     -1px -1px 0 var(--color-outline),
@@ -573,9 +584,9 @@ main:has(.settings-panel:not([hidden])) {
 
 .goal-track {
   position: relative;
-  height: 28px;
+  height: 42px;
   overflow: hidden;
-  border: 2px solid var(--color-border);
+  border: 2px solid var(--color-outline);
   border-radius: 8px;
   background: var(--color-goal-track);
 }
@@ -593,10 +604,10 @@ main:has(.settings-panel:not([hidden])) {
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding-inline: 8px;
+  padding-inline: 14px;
   color: var(--color-text);
-  font-size: 0.77rem;
-  font-weight: 800;
+  font-size: clamp(0.8rem, 4vw, 1.1rem);
+  font-weight: 400;
   text-shadow:
     -1px -1px 0 var(--color-outline),
     0 -1px 0 var(--color-outline),

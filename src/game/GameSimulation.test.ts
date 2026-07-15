@@ -60,9 +60,9 @@ describe('GameSimulation progression', () => {
     expect(first.kind).toBe('hit')
     if (first.kind !== 'hit') throw new Error('Expected hit')
     expect(first.critical).toBe(true)
-    expect(first.reward.eq(6.25)).toBe(true)
+    expect(first.reward.eq(12.5)).toBe(true)
     const second = hitCurrentTarget(game, 10_000)
-    expect(second.reward.eq(6.5625)).toBe(true)
+    expect(second.reward.eq(13.125)).toBe(true)
   })
 
   it('doubles target, critical, and completion Point gains', () => {
@@ -78,7 +78,7 @@ describe('GameSimulation progression', () => {
     for (let target = 0; target < REQUIRED_HITS; target += 1) {
       hitCurrentTarget(game, target * 10_000)
     }
-    expect(game.getSnapshot().points.eq(REQUIRED_HITS * 10.5)).toBe(true)
+    expect(game.getSnapshot().points.eq(REQUIRED_HITS * 20.5)).toBe(true)
   })
 
   it('spends one Medal once and doubles target, critical, and completion gains', () => {
@@ -101,7 +101,7 @@ describe('GameSimulation progression', () => {
     for (let target = 0; target < REQUIRED_HITS; target += 1) {
       hitCurrentTarget(game, target * 10_000)
     }
-    expect(game.getSnapshot().points.eq(REQUIRED_HITS * 10.5)).toBe(true)
+    expect(game.getSnapshot().points.eq(REQUIRED_HITS * 20.5)).toBe(true)
     expect(game.getSnapshot().medals.eq(1)).toBe(true)
     expect(game.getSnapshot().lifetimeMedals.eq(2)).toBe(true)
   })
@@ -169,7 +169,7 @@ describe('GameSimulation progression', () => {
     expect(upgraded.kind).toBe('active')
     if (upgraded.kind !== 'active') throw new Error('Expected active run')
     expect(upgraded.requiredHits).toBe(40)
-    expect(upgraded.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.5)
+    expect(upgraded.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2)
     expect(upgraded.missesRemaining).toBe(1)
   })
 

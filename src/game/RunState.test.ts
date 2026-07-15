@@ -4,7 +4,7 @@ import {
   HIT_TOLERANCE_RADIANS,
   REQUIRED_HITS,
   RESULT_COOLDOWN_MS,
-  SHIELD_INVULNERABILITY_MS,
+  SHIELD_RECOVERY_MS,
   TARGET_HALF_WIDTH_RADIANS,
 } from './constants'
 import {
@@ -101,7 +101,7 @@ describe('run state transitions', () => {
     )
     expect(larger.kind).toBe('hit')
 
-    const passingState = hittableState({ markerAngle: 0, targetAngle: 0.1 })
+    const passingState = hittableState({ markerAngle: 0, targetAngle: 0.04 })
     expect(tickRunState(passingState, 0.16, 100, random).kind).toBe('passed-target')
     expect(
       tickRunState({ ...passingState, targetHalfWidth: largerHalfWidth }, 0.16, 100, random).kind,
@@ -143,10 +143,10 @@ describe('run state transitions', () => {
     expect(result.state.consecutiveHits).toBe(0)
     expect(result.state.missesRemaining).toBe(0)
     expect(result.state.direction).toBe(-1)
-    expect(result.state.invulnerableUntil).toBe(1_000 + SHIELD_INVULNERABILITY_MS)
+    expect(result.state.invulnerableUntil).toBe(1_000 + SHIELD_RECOVERY_MS)
 
-    expect(activateRun(result.state, 1_100, random).kind).toBe('invulnerable')
-    expect(activateRun(result.state, 1_200, random).kind).toBe('miss')
+    expect(activateRun(result.state, 1_999, random).kind).toBe('invulnerable')
+    expect(activateRun(result.state, 2_000, random).kind).toBe('miss')
   })
 
   it('fails immediately without an allowance and uses the configured cooldown', () => {
@@ -169,10 +169,10 @@ describe('run state transitions', () => {
     const forgiven = tickRunState(state, 0.19, 1_000, random)
     expect(forgiven.kind).toBe('forgiven-miss')
     if (forgiven.kind !== 'forgiven-miss') throw new Error('Expected forgiveness')
-    const passingAgain = { ...forgiven.state, targetAngle: forgiven.state.markerAngle + 0.1 }
-    const protectedPass = tickRunState(passingAgain, 0.19, 1_100, random)
-    expect(protectedPass.kind).toBe('invulnerable')
-    if (protectedPass.kind !== 'invulnerable') throw new Error('Expected invulnerability')
+    const protectedPass = tickRunState(forgiven.state, 0.19, 1_999, random)
+    expect(protectedPass.kind).toBe('none')
+    expect(protectedPass.state.markerAngle).toBe(forgiven.state.markerAngle)
+    if (protectedPass.state.kind !== 'active') throw new Error('Expected an active run')
     const afterProtection = {
       ...protectedPass.state,
       targetAngle: protectedPass.state.markerAngle + protectedPass.state.direction * 0.1,

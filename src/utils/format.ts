@@ -1,12 +1,14 @@
 import Decimal from 'break_infinity.js'
 
-const SCIENTIFIC_THRESHOLD = new Decimal(1_000_000)
+const SCIENTIFIC_THRESHOLD = new Decimal(1_000_000_000)
 
 export function formatDecimal(value: Decimal, maximumFractionDigits = 2): string {
   if (!Number.isFinite(value.m) || !Number.isFinite(value.e)) {
     return value.sign() < 0 ? '-∞' : '∞'
   }
-  if (value.abs().gte(SCIENTIFIC_THRESHOLD)) return value.toExponential(maximumFractionDigits)
+  if (value.abs().gte(SCIENTIFIC_THRESHOLD)) {
+    return value.toExponential(maximumFractionDigits).replace('e+', 'e')
+  }
 
   return value.toNumber().toLocaleString('en-US', {
     maximumFractionDigits,

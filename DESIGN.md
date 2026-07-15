@@ -95,7 +95,7 @@ At minimum, show:
 - Current run score and requirement centered inside the lock, such as `7 / 50`
 - A large `Click to Play` idle/restart prompt
 
-Use the shared big-number formatting utilities for resource values. Run hit counts may remain ordinary integers.
+Use the shared big-number formatting utilities for resource values. Keep comma-separated ordinary notation below one billion, then use compact exponent notation without a plus sign, such as `1.00e9`. Run hit counts may remain ordinary integers.
 
 ## 6. Lock Gameplay Presentation
 
@@ -142,10 +142,10 @@ Support all of the following:
 
 - Primary mouse button
 - Touch or pointer tap
-- Spacebar
-- Enter when the lock control is focused
+- Spacebar when the lock control is focused or hovered
+- Enter when the lock control is focused or hovered
 
-Prevent duplicate scoring from the same physical interaction. Pointer input should be handled through Pointer Events where possible.
+Prevent duplicate scoring from the same physical interaction. Hover shortcuts must not intercept Space or Enter from another focused interactive control. Pointer input should be handled through Pointer Events where possible.
 
 ### Hit detection
 
@@ -179,7 +179,7 @@ On a miss:
 - Briefly shake, squash, or pulse the lock.
 - Freeze the marker for a short result beat.
 - Keep the missed target visible throughout the cooldown so the player can compare the final bar position with the target.
-- Display the cooldown countdown as large red text in the center of the lock without a separate failure label.
+- Display the cooldown countdown as large red text in the center of the lock without a separate failure label, and keep the failed run's score visible beneath it.
 - After the cooldown, return the ring to its normal color, resume the bar at default idle speed, and replace the countdown with a large `Click to Play` prompt.
 - Reloading during the cooldown must restore the missed-target presentation and only the time still remaining; a reload must not reset directly to idle.
 - Reloading or closing during an active run counts as an interruption: preserve the current marker and target as a failure presentation and apply the normal full cooldown before another run can start.
@@ -201,16 +201,16 @@ On completing all currently required hits (initially 50):
 - Each target begins at a base value of 1 Point. Repeatable Target Value levels add 25% and cost `3 × 1.4^level` Points, rounded to the nearest integer.
 - On completion of the first progression goal (100 lifetime Points), fade in all initial one-time upgrades together: consecutive value (100), Critical Hits (100), a three-second failure cooldown (250), 2× all Point gains (500), 20% lower speed scaling (1,000), and one forgiven miss (2,500). Feature visibility should reference goal IDs rather than duplicate numeric thresholds.
 - Consecutive value begins at 1× on the first target and scales subsequent uninterrupted targets by 1.05×. A forgiven miss skips the target without Points or hit progress, resets the streak, reverses direction, and consumes the run's allowance.
-- Critical Hits begin at 2% chance and grant 5× target Points. Roll critical status when each target spawns and keep it fixed until that target is resolved. Render critical targets gold with sparkling accents so the bonus is visible before the hit; when the system requests reduced motion, keep the gold styling and render the sparkles without animation. Critical-chance levels add 0.5 percentage points, cost `20 × 1.5^level` rounded to the nearest integer, and cap at 100%.
+- Critical Hits begin at 3% chance and grant 10× target Points. Roll critical status when each target spawns and keep it fixed until that target is resolved. Render critical targets gold with sparkling accents so the bonus is visible before the hit; when the system requests reduced motion, keep the gold styling and render the sparkles without animation. Critical-chance levels add 0.5 percentage points, cost `20 × 1.5^level` rounded to the nearest integer, and cap at 100%.
 - The completion bonus is 25% of the run's accumulated pre-critical target values, so critical hits do not multiply it.
 - Award one Medal exactly once per Jackpot. The first Medal earned permanently reveals the gold Medal readout and Medal shop for the session, even after the Medal is spent.
-- Place the Medal shop to the right of the normal upgrades behind a vertical divider. Match the `Point Upgrades` and `Medal Upgrades` heading typography, use gold for purchased Medal-card outlines, and leave enough edge space that outlines are never clipped. Smoothly resize the normal upgrades while the shop fades and slides in; on mobile, stack it below a horizontal divider. Disable this transition when reduced motion is requested.
-- Keep Medal cards in one fixed vertical list ordered as Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). Their effects provide a stacking 2× Point multiplier, additive 25% target-size increases, five-target requirement reductions, an additive forgiven miss, and a recorded WIP Research unlock. Snapshot target size, required hits, and Medal miss allowance when a run starts.
+- Place the Medal shop to the right of the normal upgrades behind a continuous vertical divider that crosses the horizontal separator without gaps. Match the `Point Upgrades` and `Medal Upgrades` heading typography, use gold for purchased Medal-card outlines, and leave enough edge space that outlines are never clipped. Smoothly resize the normal upgrades while the shop fades and slides in; on mobile, stack it below a horizontal divider. Disable this transition when reduced motion is requested.
+- Keep Medal cards in one fixed vertical list ordered as Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). Their effects provide a stacking 2× Point multiplier, additive 50% target-size increases, five-target requirement reductions, an additive forgiven miss, and a recorded WIP Research unlock. Snapshot target size, required hits, and Medal miss allowance when a run starts.
 - Shorter Jackpot reveals Rapid Recovery for 10,000 Points and Efficient Scaling for 25,000 Points. Rapid Recovery halves the effective failure cooldown, including Quick Recovery; Efficient Scaling changes each repeatable base to `1 + (base − 1) × 0.75` without reordering cards.
 - Place upgrade cards directly below the lock without a surrounding section panel. Label the repeatable section `Point Upgrades` in the Point accent color, omit a visible one-time heading, and retain the horizontal divider between the Point sections. Align each unlocked currency readout above the center of the shop that spends it.
 - Preserve purchased one-time cards with a Point-accent outline and show every one-time upgrade once the section unlocks. Place cards in increasing base-cost order when the view is created, then keep that order fixed even as repeatable costs change. Repeatable cards remain visible and show their cumulative result. The fade-in occurs only once when the required goal is reached and must not restart after purchases, hits, or tab changes.
 - Progression sections that have not unlocked must be removed from layout sizing as well as hidden visually, so their cards cannot create blank scrollable space.
-- When Second Chance is consumed, use a light ocean-blue activation effect and grant 200ms of invulnerability. Ignore inputs during that window, and safely relocate a target if it is passed before protection expires.
+- When Second Chance is consumed, use a light ocean-blue activation effect, freeze play, and show a one-second millisecond countdown in the center of the lock. Ignore inputs during that window, then resume with the safely relocated target.
 
 ### Animation timing
 
@@ -287,13 +287,13 @@ When enabled, eligible inactive tabs may receive the red attention outline descr
 
 A compact status area is fixed or anchored to the bottom of the application.
 
-Center the version label immediately above a nearly full-width dark progress track. Place the goal text over the track itself, following the compact incremental-game reference layout rather than a multi-column footer. Keep the sticky footer background transparent so content remains visible around the version and progress track.
+Center the enlarged version label immediately above a nearly full-width, 42px-tall progress track, with a modest offset above the bottom edge. Render the version label in white with a complete black outline. Place substantially larger, regular-weight goal text over the track itself with enough inset that it does not touch the border, following the compact incremental-game reference layout rather than a multi-column footer. Keep the sticky footer background transparent so content remains visible around the version and progress track.
 
 ### Version label
 
 Display the game name and semantic version, for example:
 
-`Lock Incremental v0.1.0 by WoodyPython`
+`Lock Incremental v0.1.1 by WoodyPython`
 
 Keep the version in one source of truth and inject or import it where displayed.
 
@@ -319,7 +319,7 @@ Constraints:
 - Clamp visual progress between 0% and 100%.
 - Calculate values with `break_infinity.js` where they can exceed normal numeric limits.
 - The bar must remain legible on narrow screens.
-- Use a dark green progress track/fill and give overlaid goal text a complete black outline for readability.
+- Use a very dark gray progress track, a saturated green fill, and a solid black border without an outer glow. Give overlaid goal text a complete black outline for readability.
 - Once a goal is completed, transition to the next configured goal without losing previously earned progress.
 - Goal definitions belong in game data, not hard-coded DOM logic.
 

@@ -8,7 +8,9 @@ describe('Decimal utilities', () => {
     expect(formatDecimal(new Decimal(0))).toBe('0')
     expect(formatDecimal(new Decimal(-12.5))).toBe('-12.5')
     expect(formatDecimal(new Decimal(999_999))).toBe('999,999')
-    expect(formatDecimal(new Decimal('1e1000'))).toBe('1.00e+1000')
+    expect(formatDecimal(new Decimal(999_999_999))).toBe('999,999,999')
+    expect(formatDecimal(new Decimal(1_000_000_000))).toBe('1.00e9')
+    expect(formatDecimal(new Decimal('1e1000'))).toBe('1.00e1000')
   })
 
   it('round-trips stable serialized values', () => {

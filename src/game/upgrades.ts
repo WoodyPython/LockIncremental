@@ -67,8 +67,8 @@ const ONE_TIME_UNLOCK: UnlockRequirement = {
   goalId: FIRST_PROGRESSION_GOAL_ID,
 }
 
-export const CRITICAL_REWARD_MULTIPLIER = new Decimal(5)
-export const CRITICAL_BASE_CHANCE = 0.02
+export const CRITICAL_REWARD_MULTIPLIER = new Decimal(10)
+export const CRITICAL_BASE_CHANCE = 0.03
 export const CRITICAL_CHANCE_PER_LEVEL = 0.005
 export const CRITICAL_MAX_CHANCE = 1
 export const MAX_CRITICAL_CHANCE_LEVEL = Math.round(
@@ -108,7 +108,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     id: 'critical-hits',
     kind: 'one-time',
     name: 'Critical Hits',
-    description: 'Unlock a 2% chance for targets to award 5× Points.',
+    description: 'Unlock a 3% chance for targets to award 10× Points.',
     baseCost: new Decimal(100),
     unlockRequirement: ONE_TIME_UNLOCK,
   },

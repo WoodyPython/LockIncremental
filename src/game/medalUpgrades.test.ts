@@ -51,14 +51,14 @@ describe('Medal upgrades', () => {
     expect(medalTargetHalfWidth(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(TARGET_HALF_WIDTH_RADIANS)
     expect(
       medalTargetHalfWidth({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'larger-targets': 1 }),
-    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.25)
+    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.5)
     expect(
       medalTargetHalfWidth({
         ...EMPTY_MEDAL_UPGRADE_LEVELS,
         'larger-targets': 1,
         'jackpot-mastery': 1,
       }),
-    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.5)
+    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2)
 
     expect(medalRequiredHits(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(REQUIRED_HITS)
     expect(medalRequiredHits({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'shorter-jackpot': 1 })).toBe(45)

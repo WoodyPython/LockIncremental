@@ -6,7 +6,7 @@ import {
   JACKPOT_MEDAL_REWARD,
   REQUIRED_HITS,
   RESULT_COOLDOWN_MS,
-  SHIELD_INVULNERABILITY_MS,
+  SHIELD_RECOVERY_MS,
   TARGET_HALF_WIDTH_RADIANS,
   activeSpeedForHits,
   hitToleranceForTargetHalfWidth,
@@ -141,7 +141,7 @@ function forgiveMiss(
   return {
     ...relocateTarget(state, random, rollCriticalTarget),
     missesRemaining: state.missesRemaining - 1,
-    invulnerableUntil: now + SHIELD_INVULNERABILITY_MS,
+    invulnerableUntil: now + SHIELD_RECOVERY_MS,
   }
 }
 
@@ -169,6 +169,9 @@ export function tickRunState(
   }
 
   if (state.kind === 'active') {
+    if (now < state.invulnerableUntil) {
+      return { kind: 'none', state }
+    }
     const nextMarkerAngle = advanceAngle(
       state.markerAngle,
       state.direction,

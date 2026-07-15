@@ -35,6 +35,7 @@ export class App {
   private pointsValue!: HTMLElement
   private medalsValue!: HTMLElement
   private resourceRow!: HTMLElement
+  private progressionLayout!: HTMLElement
   private mainContent!: HTMLElement
   private goalText!: HTMLElement
   private goalFill!: HTMLElement
@@ -70,18 +71,20 @@ export class App {
                 aria-label="Lock game. Activate to start, then activate when the rotating bar overlaps the target."
               ></canvas>
             </div>
-            <div class="progression-resources" data-resources>
-              <div class="progression-points" aria-label="Current Points">
-                <strong data-readout="points">0</strong>
-                <span>Points</span>
+            <div class="progression-layout" data-progression-layout>
+              <div class="progression-resources" data-resources>
+                <div class="progression-points" aria-label="Current Points">
+                  <strong data-readout="points">0</strong>
+                  <span>Points</span>
+                </div>
+                <div class="progression-medals" aria-label="Current Medals" aria-hidden="true" data-medal-readout>
+                  <strong data-readout="medals">0</strong>
+                  <span>Medals</span>
+                </div>
               </div>
-              <div class="progression-medals" aria-label="Current Medals" aria-hidden="true" data-medal-readout>
-                <strong data-readout="medals">0</strong>
-                <span>Medals</span>
-              </div>
+              <div class="progression-separator" data-upgrades-divider aria-hidden="true"></div>
+              <div data-upgrades></div>
             </div>
-            <div class="progression-separator" data-upgrades-divider aria-hidden="true"></div>
-            <div data-upgrades></div>
           </section>
           <section id="panel-settings" class="tab-panel settings-panel" role="tabpanel" data-panel="settings" hidden aria-labelledby="tab-settings" data-settings-panel></section>
         </main>
@@ -100,6 +103,7 @@ export class App {
     this.pointsValue = this.requireElement('[data-readout="points"]')
     this.medalsValue = this.requireElement('[data-readout="medals"]')
     this.resourceRow = this.requireElement('[data-resources]')
+    this.progressionLayout = this.requireElement('[data-progression-layout]')
     this.mainContent = this.requireElement('.main-content')
     this.goalText = this.requireElement('[data-goal-text]')
     this.goalFill = this.requireElement('[data-goal-fill]')
@@ -145,11 +149,9 @@ export class App {
     this.input = new InputController(canvas, this.activate)
     this.loop = new GameLoop(
       (deltaSeconds, now) => {
-        const beforeTick = this.simulation.getRunState()
-        const missedTargetAngle = beforeTick.kind === 'active' ? beforeTick.targetAngle : null
         const result = this.simulation.tick(deltaSeconds, now)
         if (result !== null) {
-          this.applyPresentation(presentTick(result, now, missedTargetAngle), now)
+          this.applyPresentation(presentTick(result, now, result.state.markerAngle), now)
           if (result.kind === 'passed-target') this.persistence?.checkpoint()
         }
       },
@@ -214,7 +216,8 @@ export class App {
     const beforeActivation = this.simulation.getRunState()
     const hitAngle = beforeActivation.kind === 'active' ? beforeActivation.targetAngle : null
     const result = this.simulation.activate(now)
-    this.applyPresentation(presentActivation(result, now, hitAngle), now)
+    const effectAngle = result.kind === 'forgiven-miss' ? result.state.markerAngle : hitAngle
+    this.applyPresentation(presentActivation(result, now, effectAngle), now)
     if (result.kind === 'miss') this.persistence?.checkpoint()
     this.render(now)
   }
@@ -377,6 +380,7 @@ export class App {
     this.medalsValue.textContent = formatDecimal(snapshot.medals)
     const medalShopUnlocked = snapshot.lifetimeMedals.gte(1)
     this.resourceRow.classList.toggle('has-medals', medalShopUnlocked)
+    this.progressionLayout.classList.toggle('is-medal-unlocked', medalShopUnlocked)
     this.mainContent.classList.toggle('is-medal-layout', medalShopUnlocked)
     this.requireElement('[data-medal-readout]').setAttribute(
       'aria-hidden',
