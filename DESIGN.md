@@ -4,20 +4,15 @@
 
 Create a browser-based incremental game whose active play is based on the core timing loop of the arcade game **Pop the Lock**. The presentation should resemble established incremental games: a persistent top tab bar, a central gameplay area, a compact settings screen, and a fixed footer containing version and goal progress.
 
-The visual direction is deliberately simple rather than decorative. Use flat shapes, strong contrast, large readable numbers, and a small set of cohesive selectable themes.
+The visual direction is deliberately simple rather than decorative. Use flat shapes, strong contrast, large readable numbers, and one cohesive Ocean-blue palette.
 
 ## 2. Visual Theme
 
-Provide four high-contrast themes selectable from Settings:
-
-- **Ocean:** teal surfaces with gold and aqua highlights; the default.
-- **Ember:** charcoal and warm brown surfaces with orange highlights.
-- **Forest:** deep green surfaces with cream and amber highlights.
-- **Monochrome:** slate surfaces with white and pale blue highlights.
+Use the high-contrast **Ocean** palette: teal surfaces with gold and aqua highlights. Theme selection is intentionally deferred until more visual options are needed.
 
 ### Required palette system
 
-Define all theme colors as the shared CSS custom properties in `src/styles/tokens.css`; use no untracked color literals in components. Switching themes must update the entire interface consistently without reloading the page.
+Define all colors as shared CSS custom properties in `src/styles/tokens.css`; use no untracked color literals in components.
 
 ### General styling constraints
 
@@ -26,7 +21,7 @@ Define all theme colors as the shared CSS custom properties in `src/styles/token
 - Minimal shadows; use them only to separate active or focused elements.
 - No gradients unless used briefly as part of a win/loss animation.
 - No glassmorphism, realistic textures, or complex backgrounds.
-- Apply the selected theme consistently across every screen.
+- Apply the Ocean palette consistently across every screen.
 - Use one sans-serif display font from the system stack; do not require externally hosted fonts.
 - All interactive controls need visible hover, active, focus-visible, and disabled states.
 - The layout must work at desktop and mobile widths.
@@ -59,6 +54,7 @@ Additional progression tabs may be introduced later, but they must use the same 
 - The active tab has a strong dark filled state with readable text.
 - Inactive tabs use `--color-surface` and light text.
 - Changing tabs must not reload the page.
+- Tab panel width changes must be immediate, without an expand or contract transition.
 - Tab state does not need to be encoded in the URL for the initial version.
 - The game simulation may continue while Settings is open, but active runs should pause by default when the page is not visible.
 
@@ -185,6 +181,8 @@ On a miss:
 - Keep the missed target visible throughout the cooldown so the player can compare the final bar position with the target.
 - Display the cooldown countdown as large red text in the center of the lock without a separate failure label.
 - After the cooldown, return the ring to its normal color, resume the bar at default idle speed, and replace the countdown with a large `Click to Play` prompt.
+- Reloading during the cooldown must restore the missed-target presentation and only the time still remaining; a reload must not reset directly to idle.
+- Reloading or closing during an active run counts as an interruption: preserve the current marker and target as a failure presentation and apply the normal full cooldown before another run can start.
 
 The loss animation must not be a rapid screen flash. Respect reduced-motion preferences by replacing movement with a static color change.
 
@@ -211,6 +209,7 @@ On completing all currently required hits (initially 50):
 - Shorter Jackpot reveals Rapid Recovery for 10,000 Points and Efficient Scaling for 25,000 Points. Rapid Recovery halves the effective failure cooldown, including Quick Recovery; Efficient Scaling changes each repeatable base to `1 + (base − 1) × 0.75` without reordering cards.
 - Place upgrade cards directly below the lock without a surrounding section panel. Label the repeatable section `Point Upgrades` in the Point accent color, omit a visible one-time heading, and retain the horizontal divider between the Point sections. Align each unlocked currency readout above the center of the shop that spends it.
 - Preserve purchased one-time cards with a Point-accent outline and show every one-time upgrade once the section unlocks. Place cards in increasing base-cost order when the view is created, then keep that order fixed even as repeatable costs change. Repeatable cards remain visible and show their cumulative result. The fade-in occurs only once when the required goal is reached and must not restart after purchases, hits, or tab changes.
+- Progression sections that have not unlocked must be removed from layout sizing as well as hidden visually, so their cards cannot create blank scrollable space.
 - When Second Chance is consumed, use a light ocean-blue activation effect and grant 200ms of invulnerability. Ignore inputs during that window, and safely relocate a target if it is passed before protection expires.
 
 ### Animation timing
@@ -219,11 +218,7 @@ Use `requestAnimationFrame` and delta time for rendering and movement. Cap unusu
 
 ## 7. Settings Screen
 
-The Settings screen should mirror the compact, button-driven style common to incremental games while using the project theme.
-
-### Theme controls
-
-Show buttons for Ocean, Ember, Forest, and Monochrome. Apply the selected theme immediately. Theme persistence will follow the same save/settings lifecycle when persistence is implemented.
+The Settings screen should mirror the compact, button-driven style common to incremental games while using the Ocean palette.
 
 ### Save controls
 
@@ -238,6 +233,8 @@ Include:
 
 Do not include Discord, creator-support, or external community buttons.
 
+Clipboard and file exports contain the same compressed text format: `LI1:` followed by gzip-compressed, unpadded Base64URL data. File exports use a `.txt` extension. Text and file imports validate and decompress this format before applying a save.
+
 ### Autosave controls
 
 Include:
@@ -249,6 +246,13 @@ Default settings:
 
 - Autosave enabled
 - Autosave interval 30 seconds
+
+Manual save, import, export, wipe, and storage results appear in a compact, fixed toast at the top
+center of the viewport rather than as inline Settings text. The complete toast fades and drops a
+short distance into view without exposing a detached border or shadow, lingers, then rises smoothly
+out of view; it also includes a dismiss button. Success messages
+dismiss after about three seconds and errors after about six seconds. Successful setting changes
+and routine autosaves do not show a toast, while manual actions and storage failures remain visible.
 
 When autosave is disabled, the interval selector may remain visible but should appear disabled.
 

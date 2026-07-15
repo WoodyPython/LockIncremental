@@ -35,6 +35,12 @@ describe('GameSimulation progression', () => {
     expect(snapshot.lifetimePoints.eq(REQUIRED_HITS * 1.25)).toBe(true)
     expect(snapshot.medals.eq(1)).toBe(true)
     expect(snapshot.lifetimeMedals.eq(1)).toBe(true)
+    expect(snapshot.statistics).toEqual({
+      runsStarted: 1,
+      targetsHit: REQUIRED_HITS,
+      bestRunHits: REQUIRED_HITS,
+      completedRuns: 1,
+    })
     expect(game.activate(300_000).reward.eq(0)).toBe(true)
     expect(game.getSnapshot().points.eq(snapshot.points)).toBe(true)
     expect(game.getSnapshot().medals.eq(1)).toBe(true)

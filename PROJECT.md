@@ -66,7 +66,7 @@ Completion awards the calculated reward and one Medal exactly once, updates life
 - Import from file
 - Wipe save with two-step confirmation
 - Optional tab-notification setting and reusable red tab highlight
-- Selectable Ocean, Ember, Forest, and Monochrome themes
+- A single cohesive Ocean-blue palette
 - Responsive desktop and mobile layout
 - Save schema versioning and migration infrastructure
 
@@ -88,7 +88,7 @@ Completion awards the calculated reward and one Medal exactly once, updates life
 - **Vite** as the development server and production build tool
 - **Vanilla TypeScript** for game logic and UI behavior
 - **HTML** for semantic application structure
-- **CSS** for layout, responsive styling, animation, and token-driven themes
+- **CSS** for layout, responsive styling, animation, and token-driven colors
 - **Canvas 2D API** for the lock and gameplay effects
 
 A component framework is intentionally omitted. The project has a small number of screens, and its central interaction is a custom animation loop rather than a large data-driven application UI.
@@ -110,7 +110,7 @@ Reasons:
 - JSON data can be loaded and written directly.
 - Cookies would be smaller, would be sent with HTTP requests where applicable, and are not intended as a game-save store.
 
-The save must include a schema version and serialize `Decimal` values as strings. Provide file and clipboard export because local storage is tied to the current browser profile and origin.
+The save must include a schema version and serialize `Decimal` values as strings. Portable exports use an `LI1:`-prefixed gzip/Base64URL string for both clipboard and text-file transfer because local storage is tied to the current browser profile and origin.
 
 Offline time may be recorded as metadata, but it must not produce rewards in the initial game.
 
@@ -147,13 +147,24 @@ The save should contain:
 - Statistics such as attempts, successes, best partial run, and completed runs
 - User settings
 
+Save compatibility is additive by default. Serialized game fields, upgrade IDs,
+statistics, and settings have centralized typed defaults; when an older save is
+missing a known field, loading fills that field and then validates the resulting
+canonical save. Present but malformed values still reject the save, and unknown
+legacy fields are discarded. Do not increment the schema version for ordinary
+additive fields. Increment it and add an explicit sequential migration only when
+persisted data is renamed, restructured, changes units, or otherwise changes
+meaning. Saves produced by a newer schema version remain unsupported.
+
 Do not serialize transient state such as:
 
 - Current animation frame
 - Active pointer state
 - Temporary particles
 - Open confirmation dialogs
-- A partially active run, unless a later design intentionally supports run restoration
+- A partially active run
+
+Failure cooldown presentation is the only run-state exception. Save it immediately on failure and subtract elapsed wall-clock time on load so reloading cannot bypass the penalty. If the page closes or reloads during an active run, convert the active marker and target into a full failure cooldown; earned resources remain saved, but the player cannot immediately restart the run.
 
 On load, default to idle. This avoids ambiguous scoring after a refresh.
 
@@ -231,7 +242,7 @@ Exact commands may change with the chosen TypeScript configuration, but equivale
 ### Milestone 2: Application shell
 
 - Main and Settings tabs
-- Theme and responsive layout
+- Fixed Ocean palette and responsive layout
 - Resource readouts
 - Footer version and first goal progress bar
 - Success, failure, and notification effects

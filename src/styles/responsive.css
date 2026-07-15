@@ -1,3 +1,9 @@
+@media (max-width: 900px) {
+  .options-button-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 640px) {
   .tabs {
     overflow-x: auto;
@@ -11,9 +17,30 @@
     width: 100%;
   }
 
-  .upgrade-grid,
-  .theme-grid {
+  .upgrade-grid {
     grid-template-columns: 1fr;
+  }
+
+  .options-button-grid,
+  .option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .options-button-grid button {
+    min-height: 52px;
+  }
+
+  .dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .dialog-actions button {
+    width: 100%;
+  }
+
+  .status-footer {
+    position: static;
+    margin-top: 8px;
   }
 
   .upgrades-layout,
@@ -69,7 +96,15 @@
     animation: none;
   }
 
-  main,
+  .tab.has-attention:not(.is-active) {
+    animation: none;
+  }
+
+  .save-toast.is-entering,
+  .save-toast.is-exiting {
+    animation: none;
+  }
+
   .progression-resources,
   .progression-medals,
   .upgrades-layout,

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 test('loads the shell and switches tabs without navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('/')
 
   await expect(page.getByText('Lock Incremental v0.1.0 by WoodyPython')).toBeVisible()
@@ -26,6 +27,14 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await expect(page.getByText('One-time Upgrades')).toHaveCount(0)
   await expect(page.getByText(/Earn 100 lifetime Points/)).toBeVisible()
   await expect(page.locator('.status-footer')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(page.locator('[data-medal-upgrades]')).toHaveCSS('height', '0px')
+  const visibleContentBottom = await page
+    .locator('[data-upgrade-id="target-value"]')
+    .evaluate((element) => element.getBoundingClientRect().bottom + window.scrollY)
+  const documentHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+  const viewportHeight = page.viewportSize()?.height
+  if (viewportHeight === undefined) throw new Error('Expected a configured viewport')
+  expect(documentHeight - visibleContentBottom).toBeLessThanOrEqual(viewportHeight)
 
   const pointsBox = await page.locator('.progression-points').boundingBox()
   const dividerBox = await page.locator('[data-upgrades-divider]').boundingBox()
@@ -41,25 +50,177 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
 
   const mainTab = page.getByRole('tab', { name: 'Main' })
   const settingsTab = page.getByRole('tab', { name: 'Settings' })
+  const mainContent = page.locator('main')
+  const lockCanvas = page.locator('.lock-canvas')
+  const canvasWidth = await lockCanvas.getAttribute('width')
+  await expect(mainContent).toHaveCSS('transition-duration', '0s')
+  const mainWidth = (await mainContent.boundingBox())?.width
+  expect(mainWidth).toBe(800)
   await expect(mainTab).toHaveAttribute('aria-controls', 'panel-main')
   await expect(settingsTab).toHaveAttribute('aria-controls', 'panel-settings')
   await mainTab.focus()
   await page.keyboard.press('ArrowRight')
   await expect(settingsTab).toBeFocused()
   await expect(settingsTab).toHaveAttribute('aria-selected', 'true')
+  await page.waitForTimeout(50)
+  await expect(lockCanvas).toHaveAttribute('width', canvasWidth ?? '')
+  expect((await mainContent.boundingBox())?.width).toBe(1180)
   await page.keyboard.press('Home')
   await expect(mainTab).toBeFocused()
   await page.keyboard.press('End')
   await expect(settingsTab).toBeFocused()
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-  await expect(page.getByText('Persistence is coming next')).toBeVisible()
-  await page.getByRole('button', { name: /Ember/ }).click()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'ember')
-  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#211b1a')
+  await expect(page.getByRole('heading', { name: 'Main Options' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Save Now' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Export to Clipboard' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Import from Text' })).toBeVisible()
+  await expect(page.getByText('Offline Progress')).toHaveCount(0)
+  await expect(page.getByText('Theme', { exact: true })).toHaveCount(0)
+  await expect(page.getByText(/community|Discord|support/i)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Enabled' }).first()).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme')
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', '#0d7774')
 
   await mainTab.click()
+  expect((await mainContent.boundingBox())?.width).toBe(800)
+  await expect(lockCanvas).toHaveAttribute('width', canvasWidth ?? '')
   await expect(page.getByRole('button', { name: /Lock game/ })).toBeVisible()
   await expect(page).toHaveURL(/\/$/)
+
+  await page.setViewportSize({ width: 375, height: 700 })
+  const mobileMainWidth = (await mainContent.boundingBox())?.width
+  await settingsTab.click()
+  await expect(mainContent).toHaveCSS('transition-duration', '0s')
+  expect((await mainContent.boundingBox())?.width).toBe(mobileMainWidth)
+})
+
+test('persists settings and supports compressed export, import, file download, and wipe', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  await page.goto('/')
+  await page.getByRole('tab', { name: 'Settings' }).click()
+
+  const autosaveGroup = page.getByRole('group', { name: 'Autosave' })
+  await autosaveGroup.getByRole('button', { name: 'Disabled' }).click()
+  await expect(autosaveGroup.getByRole('button', { name: 'Disabled' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  const intervalButtons = page.getByRole('group', { name: 'Autosave Interval' }).getByRole('button')
+  await expect(intervalButtons).toHaveCount(4)
+  expect(
+    await intervalButtons.evaluateAll((buttons) =>
+      buttons.every((button) => button.hasAttribute('disabled')),
+    ),
+  ).toBe(true)
+  await expect(page.locator('[data-save-toast]')).toBeHidden()
+
+  await page.reload()
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await expect(
+    page.getByRole('group', { name: 'Autosave' }).getByRole('button', { name: 'Disabled' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('[data-save-toast]')).toBeHidden()
+
+  await page.getByRole('button', { name: 'Export to Clipboard' }).click()
+  await expect(page.locator('[data-save-toast]')).toHaveText(
+    'Compressed save copied to the clipboard.',
+  )
+  const portable = await page.evaluate(() => navigator.clipboard.readText())
+  expect(portable).toMatch(/^LI1:[A-Za-z0-9_-]+$/u)
+
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export as File' }).click()
+  const download = await downloadPromise
+  expect(download.suggestedFilename()).toMatch(/^lock-incremental-save-.*\.txt$/u)
+
+  await page.getByRole('button', { name: 'Import from Text' }).click()
+  const importDialog = page.getByRole('dialog', { name: 'Import from Text' })
+  await importDialog.getByRole('textbox', { name: 'Compressed save text' }).fill(portable)
+  await importDialog.getByRole('button', { name: 'Import Save' }).click()
+  await expect(importDialog).toBeHidden()
+  await expect(page.locator('[data-save-toast]')).toContainText('imported successfully')
+
+  await page.getByRole('button', { name: 'Save Now' }).click()
+  await expect(page.locator('[data-save-toast]')).toHaveText('Progress saved.')
+  await page.locator('[data-import-file]').setInputFiles({
+    name: 'lock-save.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from(portable),
+  })
+  await expect(page.locator('[data-save-toast]')).toContainText('imported successfully')
+
+  await page.getByRole('button', { name: 'Wipe Save' }).click()
+  const wipeDialog = page.getByRole('dialog', { name: 'Wipe all progress?' })
+  await expect(wipeDialog).toBeVisible()
+  await wipeDialog.getByRole('button', { name: 'Confirm Wipe' }).click()
+  await expect(wipeDialog).toBeHidden()
+  await expect(page.locator('[data-save-toast]')).toContainText('wiped')
+
+  await page.reload()
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  await expect(
+    page.getByRole('group', { name: 'Autosave' }).getByRole('button', { name: 'Enabled' }),
+  ).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('keeps autosaves and successful setting changes silent', async ({ page }) => {
+  await page.addInitScript(() => {
+    const nativeSetInterval = window.setInterval.bind(window)
+    window.setInterval = ((handler: TimerHandler, timeout?: number) =>
+      nativeSetInterval(handler, timeout === 15_000 ? 250 : timeout)) as typeof window.setInterval
+  })
+  await page.goto('/')
+  await page.getByRole('tab', { name: 'Settings' }).click()
+
+  await page
+    .getByRole('group', { name: 'Autosave Interval' })
+    .getByRole('button', { name: '15s' })
+    .click()
+  await page.waitForTimeout(400)
+  await expect(page.locator('[data-save-toast]')).toBeHidden()
+  await expect(page.getByRole('switch', { name: 'Autosave notifications' })).toHaveCount(0)
+})
+
+test('replaces toast timers and reports import errors globally and in the dialog', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await page.getByRole('tab', { name: 'Settings' }).click()
+  const toast = page.locator('[data-save-toast]')
+  const saveNow = page.getByRole('button', { name: 'Save Now' })
+
+  await saveNow.click()
+  await expect(toast).toHaveText('Progress saved.')
+  await expect(toast).toHaveCSS('animation-name', 'save-toast-drop')
+  await toast.getByRole('button', { name: 'Dismiss notification' }).click()
+  await expect(toast).toHaveClass(/is-exiting/)
+  await expect(toast).toHaveCSS('animation-name', 'save-toast-rise')
+  await expect(toast).toBeHidden()
+
+  await saveNow.click()
+  await page.waitForTimeout(1_000)
+  await saveNow.click()
+  await page.waitForTimeout(2_200)
+  await expect(toast).toBeVisible()
+  await expect(toast).toHaveAttribute('role', 'status')
+  await expect(toast).toHaveAttribute('aria-live', 'polite')
+  await page.waitForTimeout(650)
+  await expect(toast).toHaveClass(/is-exiting/, { timeout: 500 })
+  await expect(toast).toHaveCSS('animation-name', 'save-toast-rise')
+  await expect(toast).toBeHidden({ timeout: 500 })
+
+  await page.getByRole('button', { name: 'Import from Text' }).click()
+  const importDialog = page.getByRole('dialog', { name: 'Import from Text' })
+  await importDialog.getByRole('textbox', { name: 'Compressed save text' }).fill('not-a-save')
+  await importDialog.getByRole('button', { name: 'Import Save' }).click()
+  await expect(importDialog).toContainText('Import failed')
+  await expect(toast).toContainText('Import failed')
+  await expect(toast).toHaveClass(/is-error/)
 })
 
 test('cleans up upgrade reveal animation before later tab changes', async ({ page }) => {
@@ -219,6 +380,80 @@ test('supports keyboard start, failure, and blocked cooldown input', async ({ pa
 
   await page.keyboard.press('Enter')
   await expect(live).toContainText('Run failed')
+})
+
+test('keeps a failure cooldown active across reloads', async ({ page }) => {
+  await page.goto('/')
+  let lock = page.getByRole('button', { name: /Lock game/ })
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toContainText('Run failed')
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('lock-incremental:save')
+        if (raw === null) return 0
+        const parsed = JSON.parse(raw) as {
+          game?: { failureCooldown?: { remainingMs?: number } }
+        }
+        return parsed.game?.failureCooldown?.remainingMs ?? 0
+      }),
+    )
+    .toBeGreaterThan(0)
+
+  await page.reload()
+  lock = page.getByRole('button', { name: /Lock game/ })
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toHaveText('')
+
+  await page.evaluate(() => {
+    const key = 'lock-incremental:save'
+    const raw = localStorage.getItem(key)
+    if (raw === null) throw new Error('Expected a cooldown save')
+    const parsed = JSON.parse(raw) as { savedAt: string }
+    parsed.savedAt = new Date(Date.now() - 10_000).toISOString()
+    localStorage.setItem(key, JSON.stringify(parsed))
+    Object.defineProperty(Storage.prototype, 'setItem', {
+      configurable: true,
+      value: () => {
+        throw new Error('Preserve the test fixture during pagehide')
+      },
+    })
+  })
+  await page.reload()
+  lock = page.getByRole('button', { name: /Lock game/ })
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toContainText('Run started')
+})
+
+test('turns an active run into a cooldown when the page reloads', async ({ page }) => {
+  await page.goto('/')
+  let lock = page.getByRole('button', { name: /Lock game/ })
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toContainText('Run started')
+
+  await page.reload()
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const raw = localStorage.getItem('lock-incremental:save')
+        if (raw === null) return 0
+        const parsed = JSON.parse(raw) as {
+          game?: { failureCooldown?: { remainingMs?: number } }
+        }
+        return parsed.game?.failureCooldown?.remainingMs ?? 0
+      }),
+    )
+    .toBeGreaterThan(0)
+
+  lock = page.getByRole('button', { name: /Lock game/ })
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toHaveText('')
 })
 
 test('supports primary pointer input and fits the viewport', async ({ page }) => {

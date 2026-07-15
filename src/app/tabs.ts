@@ -6,6 +6,7 @@ export class TabsController {
   private readonly tabs: readonly HTMLButtonElement[]
   private readonly panels: readonly HTMLElement[]
   private connected = false
+  private selected: TabId = 'main'
 
   public constructor(private readonly root: HTMLElement) {
     this.tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
@@ -27,6 +28,7 @@ export class TabsController {
   }
 
   public select(selected: TabId, moveFocus = false): void {
+    this.selected = selected
     for (const tab of this.tabs) {
       const active = tab.dataset.tab === selected
       tab.classList.toggle('is-active', active)
@@ -35,6 +37,20 @@ export class TabsController {
       if (active && moveFocus) tab.focus()
     }
     for (const panel of this.panels) panel.hidden = panel.dataset.panel !== selected
+    this.setAttention(selected, false)
+  }
+
+  public isActive(tab: TabId): boolean {
+    return this.selected === tab
+  }
+
+  public setAttention(tabId: TabId, attention: boolean): void {
+    const tab = this.tabs.find((candidate) => candidate.dataset.tab === tabId)
+    if (tab === undefined) return
+    tab.classList.toggle('has-attention', attention)
+    if (attention)
+      tab.setAttribute('aria-label', `${tab.textContent.trim() || tabId}, attention required`)
+    else tab.removeAttribute('aria-label')
   }
 
   private readonly handleClick = (event: MouseEvent): void => {

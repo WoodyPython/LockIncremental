@@ -37,6 +37,42 @@ export interface GameSnapshot {
   readonly lifetimeMedals: Decimal
   readonly upgrades: UpgradeLevels
   readonly medalUpgrades: MedalUpgradeLevels
+  readonly statistics: GameStatistics
+}
+
+export interface GameStatistics {
+  readonly runsStarted: number
+  readonly targetsHit: number
+  readonly bestRunHits: number
+  readonly completedRuns: number
+}
+
+export interface DurableFailureCooldown {
+  readonly remainingMs: number
+  readonly markerAngle: number
+  readonly targetAngle: number
+  readonly targetCritical: boolean
+  readonly targetHalfWidth: number
+  readonly hits: number
+  readonly requiredHits: number
+}
+
+export interface DurableGameState {
+  readonly points: Decimal
+  readonly lifetimePoints: Decimal
+  readonly medals: Decimal
+  readonly lifetimeMedals: Decimal
+  readonly upgrades: UpgradeLevels
+  readonly medalUpgrades: MedalUpgradeLevels
+  readonly statistics: GameStatistics
+  readonly failureCooldown?: DurableFailureCooldown
+}
+
+export const DEFAULT_GAME_STATISTICS: GameStatistics = {
+  runsStarted: 0,
+  targetsHit: 0,
+  bestRunHits: 0,
+  completedRuns: 0,
 }
 
 export type GameTickResult =
@@ -90,8 +126,11 @@ export interface GameSimulationOptions {
   readonly targetRandom?: () => number
   readonly criticalRandom?: () => number
   readonly initialPoints?: Decimal | number | string
+  readonly initialLifetimePoints?: Decimal | number | string
   readonly initialMedals?: Decimal | number | string
   readonly initialLifetimeMedals?: Decimal | number | string
+  readonly initialState?: DurableGameState
+  readonly initialNow?: number
 }
 
 export class GameSimulation {
@@ -104,14 +143,38 @@ export class GameSimulation {
   private readonly medalUpgradeLevels: Record<MedalUpgradeId, number> = {
     ...EMPTY_MEDAL_UPGRADE_LEVELS,
   }
+  private statistics: GameStatistics = { ...DEFAULT_GAME_STATISTICS }
   private readonly targetRandom: () => number
   private readonly criticalRandom: () => number
 
   public constructor(options: GameSimulationOptions = {}) {
     this.targetRandom = options.targetRandom ?? Math.random
     this.criticalRandom = options.criticalRandom ?? Math.random
+    if (options.initialState !== undefined) {
+      const state = options.initialState
+      this.currentPoints = new Decimal(state.points)
+      this.totalPoints = new Decimal(state.lifetimePoints)
+      this.currentMedals = new Decimal(state.medals)
+      this.totalMedals = new Decimal(state.lifetimeMedals)
+      Object.assign(this.upgradeLevels, state.upgrades)
+      Object.assign(this.medalUpgradeLevels, state.medalUpgrades)
+      this.statistics = { ...state.statistics }
+      if (state.failureCooldown !== undefined && state.failureCooldown.remainingMs > 0) {
+        this.runState = {
+          kind: 'failed',
+          markerAngle: state.failureCooldown.markerAngle,
+          targetAngle: state.failureCooldown.targetAngle,
+          targetCritical: state.failureCooldown.targetCritical,
+          targetHalfWidth: state.failureCooldown.targetHalfWidth,
+          hits: state.failureCooldown.hits,
+          requiredHits: state.failureCooldown.requiredHits,
+          cooldownEndsAt: (options.initialNow ?? 0) + state.failureCooldown.remainingMs,
+        }
+      }
+      return
+    }
     this.currentPoints = new Decimal(options.initialPoints ?? 0)
-    this.totalPoints = new Decimal(options.initialPoints ?? 0)
+    this.totalPoints = new Decimal(options.initialLifetimePoints ?? options.initialPoints ?? 0)
     this.currentMedals = new Decimal(options.initialMedals ?? 0)
     this.totalMedals = new Decimal(options.initialLifetimeMedals ?? options.initialMedals ?? 0)
   }
@@ -149,6 +212,7 @@ export class GameSimulation {
       this.rollCriticalTarget,
     )
     this.runState = transition.state
+    this.recordTransition(transition)
     return this.resolveActivation(transition, targetBasePoints, targetCritical)
   }
 
@@ -192,6 +256,45 @@ export class GameSimulation {
       lifetimeMedals: new Decimal(this.totalMedals),
       upgrades: levels,
       medalUpgrades: { ...this.medalUpgradeLevels },
+      statistics: { ...this.statistics },
+    }
+  }
+
+  public getDurableState(now = 0): DurableGameState {
+    let failureCooldown: DurableFailureCooldown | undefined
+    if (this.runState.kind === 'failed') {
+      const remainingMs = Math.max(0, this.runState.cooldownEndsAt - now)
+      if (remainingMs > 0) {
+        failureCooldown = {
+          remainingMs,
+          markerAngle: this.runState.markerAngle,
+          targetAngle: this.runState.targetAngle,
+          targetCritical: this.runState.targetCritical,
+          targetHalfWidth: this.runState.targetHalfWidth,
+          hits: this.runState.hits,
+          requiredHits: this.runState.requiredHits,
+        }
+      }
+    } else if (this.runState.kind === 'active') {
+      failureCooldown = {
+        remainingMs: this.runModifiers().failureCooldownMs,
+        markerAngle: this.runState.markerAngle,
+        targetAngle: this.runState.targetAngle,
+        targetCritical: this.runState.targetCritical,
+        targetHalfWidth: this.runState.targetHalfWidth,
+        hits: this.runState.hits,
+        requiredHits: this.runState.requiredHits,
+      }
+    }
+    return {
+      points: new Decimal(this.currentPoints),
+      lifetimePoints: new Decimal(this.totalPoints),
+      medals: new Decimal(this.currentMedals),
+      lifetimeMedals: new Decimal(this.totalMedals),
+      upgrades: this.snapshotLevels(),
+      medalUpgrades: { ...this.medalUpgradeLevels },
+      statistics: { ...this.statistics },
+      ...(failureCooldown === undefined ? {} : { failureCooldown }),
     }
   }
 
@@ -232,6 +335,23 @@ export class GameSimulation {
   private readonly rollCriticalTarget = (): boolean => {
     const chance = criticalChance(this.upgradeLevels)
     return chance > 0 && this.criticalRandom() < chance
+  }
+
+  private recordTransition(transition: ActivationTransition): void {
+    if (transition.kind === 'started') {
+      this.statistics = {
+        ...this.statistics,
+        runsStarted: this.statistics.runsStarted + 1,
+      }
+      return
+    }
+    if (transition.kind !== 'hit' && transition.kind !== 'completed') return
+    this.statistics = {
+      ...this.statistics,
+      targetsHit: this.statistics.targetsHit + 1,
+      bestRunHits: Math.max(this.statistics.bestRunHits, transition.state.hits),
+      completedRuns: this.statistics.completedRuns + (transition.kind === 'completed' ? 1 : 0),
+    }
   }
 
   private runModifiers(): RunModifiers {

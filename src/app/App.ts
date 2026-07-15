@@ -3,7 +3,18 @@ import { currentGoal } from '../game/goals'
 import { LockRenderer } from '../rendering/LockRenderer'
 import { GameLoop } from '../runtime/GameLoop'
 import { InputController } from '../runtime/InputController'
-import { applyTheme, DEFAULT_THEME, THEMES, type ThemeId } from '../ui/themes'
+import { decodePortableSave, encodePortableSave } from '../storage/codec'
+import { PersistenceController, type SaveResult } from '../storage/PersistenceController'
+import { SaveRepository } from '../storage/repository'
+import {
+  createSaveEnvelope,
+  DEFAULT_GAME_SETTINGS,
+  hydrateGameState,
+  type GameSettings,
+  type SaveEnvelope,
+} from '../storage/schema'
+import { SettingsView } from '../ui/SettingsView'
+import { ToastView } from '../ui/ToastView'
 import { UpgradesView } from '../ui/upgradesView'
 import { decimalProgress, formatDecimal } from '../utils/format'
 import { GAME_NAME, GAME_VERSION } from '../version'
@@ -11,11 +22,16 @@ import { presentActivation, presentTick, type GamePresentation } from './present
 import { TabsController } from './tabs'
 
 export class App {
-  private readonly simulation = new GameSimulation()
+  private simulation = new GameSimulation()
+  private settings: GameSettings = { ...DEFAULT_GAME_SETTINGS }
+  private readonly repository = new SaveRepository()
+  private automaticWritesSuspended = false
+  private startupProblem: string | null = null
   private renderer: LockRenderer | null = null
   private loop: GameLoop | null = null
   private input: InputController | null = null
   private tabs: TabsController | null = null
+  private persistence: PersistenceController | null = null
   private pointsValue!: HTMLElement
   private medalsValue!: HTMLElement
   private resourceRow!: HTMLElement
@@ -24,12 +40,14 @@ export class App {
   private goalFill!: HTMLElement
   private liveRegion!: HTMLElement
   private upgradesView!: UpgradesView
+  private settingsView!: SettingsView
+  private toastView!: ToastView
 
   public constructor(private readonly root: HTMLElement) {}
 
   public mount(): void {
     if (this.loop !== null) return
-    applyTheme(DEFAULT_THEME)
+    this.loadInitialState()
     this.root.innerHTML = `
       <div class="app-shell">
         <header class="topbar">
@@ -65,18 +83,7 @@ export class App {
             <div class="progression-separator" data-upgrades-divider aria-hidden="true"></div>
             <div data-upgrades></div>
           </section>
-          <section id="panel-settings" class="tab-panel settings-panel" role="tabpanel" data-panel="settings" hidden aria-labelledby="tab-settings">
-            <h1 id="settings-heading">Settings</h1>
-            <section class="settings-section" aria-labelledby="theme-heading">
-              <h2 id="theme-heading">Theme</h2>
-              <div class="theme-grid" data-themes></div>
-            </section>
-            <div class="notice-panel">
-              <h2>Persistence is coming next</h2>
-              <p>Saving, import/export, autosave, notifications, and wipe controls will arrive in a later milestone.</p>
-              <p>Progress and theme selection currently last for this browser session only.</p>
-            </div>
-          </section>
+          <section id="panel-settings" class="tab-panel settings-panel" role="tabpanel" data-panel="settings" hidden aria-labelledby="tab-settings" data-settings-panel></section>
         </main>
         <footer class="status-footer">
           <div class="version">${GAME_NAME} v${GAME_VERSION} by WoodyPython</div>
@@ -97,6 +104,9 @@ export class App {
     this.goalText = this.requireElement('[data-goal-text]')
     this.goalFill = this.requireElement('[data-goal-fill]')
     this.liveRegion = this.requireElement('[data-live]')
+    this.toastView = new ToastView()
+    this.root.append(this.toastView.element)
+
     this.upgradesView = new UpgradesView(
       (upgradeId) => {
         const result = this.simulation.purchase(upgradeId)
@@ -119,7 +129,17 @@ export class App {
       },
     )
     this.requireElement('[data-upgrades]').append(this.upgradesView.element)
-    this.renderThemeChoices()
+
+    this.settingsView = new SettingsView(this.settings, {
+      saveNow: this.saveNow,
+      exportClipboard: this.exportClipboard,
+      exportFile: this.exportFile,
+      importPortableSave: this.importPortableSave,
+      wipeSave: this.wipeSave,
+      settingsChanged: this.changeSettings,
+      reportError: this.reportError,
+    })
+    this.requireElement('[data-settings-panel]').append(this.settingsView.element)
 
     this.renderer = new LockRenderer(canvas)
     this.input = new InputController(canvas, this.activate)
@@ -130,6 +150,7 @@ export class App {
         const result = this.simulation.tick(deltaSeconds, now)
         if (result !== null) {
           this.applyPresentation(presentTick(result, now, missedTargetAngle), now)
+          if (result.kind === 'passed-target') this.persistence?.checkpoint()
         }
       },
       (now) => {
@@ -139,22 +160,53 @@ export class App {
 
     this.tabs = new TabsController(this.root)
     this.tabs.connect()
+    this.persistence = new PersistenceController(
+      () => this.captureGameState(),
+      () => this.settings,
+      this.handleSaveResult,
+      this.repository,
+    )
+    this.persistence.connect(this.settings, this.automaticWritesSuspended)
     this.input.connect()
     this.loop.start()
     this.renderUi()
+
+    if (this.startupProblem !== null) this.reportError(this.startupProblem)
   }
 
   public destroy(): void {
     if (this.loop !== null) this.upgradesView.destroy()
+    this.persistence?.destroy()
     this.loop?.stop()
     this.input?.disconnect()
     this.renderer?.destroy()
     this.tabs?.destroy()
+    this.toastView.destroy()
     this.loop = null
     this.input = null
     this.renderer = null
     this.tabs = null
+    this.persistence = null
     this.root.replaceChildren()
+  }
+
+  private loadInitialState(): void {
+    const loaded = this.repository.load()
+    if (loaded.kind === 'loaded') {
+      this.simulation = new GameSimulation({
+        initialState: hydrateGameState(loaded.envelope),
+        initialNow: performance.now(),
+      })
+      this.settings = { ...loaded.envelope.settings }
+      return
+    }
+    if (loaded.kind === 'invalid') {
+      this.startupProblem = `Stored progress was not loaded: ${loaded.message} Automatic saves are paused until you save, import, or wipe.`
+      this.automaticWritesSuspended = true
+    } else if (loaded.kind === 'unavailable') {
+      this.startupProblem = `${loaded.message} Progress will remain available only for this session.`
+      this.automaticWritesSuspended = true
+    }
   }
 
   private readonly activate = (): void => {
@@ -163,7 +215,156 @@ export class App {
     const hitAngle = beforeActivation.kind === 'active' ? beforeActivation.targetAngle : null
     const result = this.simulation.activate(now)
     this.applyPresentation(presentActivation(result, now, hitAngle), now)
+    if (result.kind === 'miss') this.persistence?.checkpoint()
     this.render(now)
+  }
+
+  private readonly saveNow = (): void => {
+    this.persistence?.saveNow('manual')
+  }
+
+  private readonly exportClipboard = async (): Promise<void> => {
+    let portable: string
+    try {
+      portable = await this.createPortableSave()
+    } catch (error) {
+      this.reportError(this.errorMessage(error, 'The compressed save could not be created.'))
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(portable)
+      this.announceStatus('Compressed save copied to the clipboard.')
+    } catch {
+      this.settingsView.showPortableText(portable)
+      this.announceStatus(
+        'Clipboard access failed. Copy the compressed save from the dialog.',
+        true,
+      )
+    }
+  }
+
+  private readonly exportFile = async (): Promise<void> => {
+    try {
+      const portable = await this.createPortableSave()
+      const blob = new Blob([portable], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `lock-incremental-save-${this.fileTimestamp()}.txt`
+      link.hidden = true
+      document.body.append(link)
+      try {
+        link.click()
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url)
+        }, 0)
+      } catch (error) {
+        URL.revokeObjectURL(url)
+        throw error
+      } finally {
+        link.remove()
+      }
+      this.announceStatus('Compressed save exported as a text file.')
+    } catch (error) {
+      this.reportError(this.errorMessage(error, 'The compressed save file could not be created.'))
+    }
+  }
+
+  private readonly importPortableSave = async (text: string): Promise<boolean> => {
+    let decoded: Awaited<ReturnType<typeof decodePortableSave>>
+    try {
+      decoded = await decodePortableSave(text)
+    } catch (error) {
+      this.reportImportError(this.errorMessage(error, 'The compressed save could not be decoded.'))
+      return false
+    }
+    if (!decoded.ok) {
+      this.reportImportError(`Import failed: ${decoded.message}`)
+      return false
+    }
+
+    const backup = createSaveEnvelope(this.captureGameState(), this.settings)
+    const imported = createSaveEnvelope(
+      hydrateGameState(decoded.envelope),
+      decoded.envelope.settings,
+    )
+    const persistence = this.persistence
+    if (!persistence?.commitImport(imported)) {
+      this.settingsView.setImportError('The imported save could not be stored.')
+      return false
+    }
+    try {
+      this.applyEnvelope(imported)
+    } catch {
+      persistence.commitImport(backup)
+      this.applyEnvelope(backup)
+      this.reportImportError(
+        'The imported save could not be applied. Previous progress was restored.',
+      )
+      return false
+    }
+    this.announceStatus('Compressed save imported successfully.')
+    return true
+  }
+
+  private readonly wipeSave = (): boolean => {
+    if (!this.persistence?.removeSave()) return false
+    this.automaticWritesSuspended = false
+    this.simulation = new GameSimulation()
+    this.settings = { ...DEFAULT_GAME_SETTINGS }
+    this.renderer?.clearEffects()
+    this.settingsView.update(this.settings)
+    this.persistence.configure(this.settings)
+    this.tabs?.setAttention('settings', false)
+    this.renderUi()
+    this.render(performance.now())
+    this.announceStatus('All saved progress and settings were wiped.')
+    return true
+  }
+
+  private readonly changeSettings = (settings: GameSettings): void => {
+    this.settings = { ...settings }
+    if (!settings.tabNotificationsEnabled) this.tabs?.setAttention('settings', false)
+    this.persistence?.configure(settings)
+    if (this.automaticWritesSuspended) {
+      this.reportError(
+        'Settings changed for this session. Resolve the stored-save error to persist them.',
+      )
+      return
+    }
+    this.persistence?.saveNow('settings')
+  }
+
+  private readonly handleSaveResult = (result: SaveResult): void => {
+    if (!result.ok) {
+      this.reportError(result.message ?? 'Progress could not be saved.')
+      return
+    }
+    if (result.reason === 'manual' || result.reason === 'import') {
+      this.automaticWritesSuspended = false
+    }
+    if (result.reason === 'manual') this.announceStatus('Progress saved.')
+  }
+
+  private applyEnvelope(envelope: SaveEnvelope): void {
+    this.simulation = new GameSimulation({
+      initialState: hydrateGameState(envelope),
+      initialNow: performance.now(),
+    })
+    this.settings = { ...envelope.settings }
+    this.renderer?.clearEffects()
+    this.settingsView.update(this.settings)
+    this.persistence?.configure(this.settings)
+    this.renderUi()
+    this.render(performance.now())
+  }
+
+  private async createPortableSave(): Promise<string> {
+    return encodePortableSave(createSaveEnvelope(this.captureGameState(), this.settings))
+  }
+
+  private captureGameState(): ReturnType<GameSimulation['getDurableState']> {
+    return this.simulation.getDurableState(performance.now())
   }
 
   private render(now: number): void {
@@ -200,37 +401,6 @@ export class App {
     if (presentation.economyChanged) this.renderUi()
   }
 
-  private renderThemeChoices(): void {
-    const container = this.requireElement('[data-themes]')
-    for (const theme of THEMES) {
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.className = 'theme-choice'
-      button.dataset.themeChoice = theme.id
-      button.setAttribute('aria-pressed', String(theme.id === DEFAULT_THEME))
-
-      const name = document.createElement('strong')
-      name.textContent = theme.name
-      const description = document.createElement('span')
-      description.textContent = theme.description
-      button.append(name, description)
-      button.addEventListener('click', () => {
-        this.selectTheme(theme.id)
-      })
-      container.append(button)
-    }
-  }
-
-  private selectTheme(theme: ThemeId): void {
-    applyTheme(theme)
-    this.renderer?.invalidatePalette()
-    for (const button of this.root.querySelectorAll<HTMLButtonElement>('[data-theme-choice]')) {
-      button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme))
-    }
-    const selectedTheme = THEMES.find((candidate) => candidate.id === theme)
-    this.liveRegion.textContent = `${selectedTheme?.name ?? 'Selected'} theme applied.`
-  }
-
   private updateGoal(snapshot: GameSnapshot): void {
     const goal = currentGoal(snapshot)
     const progress = decimalProgress(goal.current, goal.requirement)
@@ -241,6 +411,33 @@ export class App {
     this.goalFill.style.width = `${percent}%`
     const track = this.requireElement('.goal-track')
     track.setAttribute('aria-valuenow', percent.toFixed(1))
+  }
+
+  private announceStatus(message: string, error = false): void {
+    this.toastView.show(message, error)
+  }
+
+  private readonly reportError = (message: string): void => {
+    this.announceStatus(message, true)
+    if (this.settings.tabNotificationsEnabled && !this.tabs?.isActive('settings')) {
+      this.tabs?.setAttention('settings', true)
+    }
+  }
+
+  private reportImportError(message: string): void {
+    this.reportError(message)
+    this.settingsView.setImportError(message)
+  }
+
+  private errorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error && error.message !== '' ? error.message : fallback
+  }
+
+  private fileTimestamp(): string {
+    return new Date()
+      .toISOString()
+      .replace(/[-:]/gu, '')
+      .replace(/\.\d{3}Z$/u, 'Z')
   }
 
   private requireElement<T extends Element = HTMLElement>(selector: string): T {

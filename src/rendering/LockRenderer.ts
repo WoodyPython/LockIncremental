@@ -80,14 +80,14 @@ export class LockRenderer {
     this.addFloatingText({ kind: 'shielded', angle, startedAt: now })
   }
 
-  public invalidatePalette(): void {
-    this.palette = null
+  public clearEffects(): void {
+    this.effect = null
+    this.floatingTextEffects.length = 0
   }
 
   public destroy(): void {
     this.resizeObserver.disconnect()
-    this.floatingTextEffects.length = 0
-    this.effect = null
+    this.clearEffects()
   }
 
   public render(run: RunState, now: number): void {
@@ -154,10 +154,9 @@ export class LockRenderer {
     if (ratioChanged) this.sizeDirty = true
     if (!this.sizeDirty) return this.cssSize
 
-    this.cssSize = Math.max(
-      1,
-      Math.floor(Math.min(this.canvas.clientWidth, this.canvas.clientHeight)),
-    )
+    const measuredSize = Math.floor(Math.min(this.canvas.clientWidth, this.canvas.clientHeight))
+    if (measuredSize <= 0) return this.cssSize
+    this.cssSize = measuredSize
     this.pixelRatio = nextPixelRatio
     const pixelSize = Math.floor(this.cssSize * this.pixelRatio)
     if (this.canvas.width !== pixelSize || this.canvas.height !== pixelSize) {
