@@ -1,7 +1,7 @@
 export const REQUIRED_HITS = 50
 export const IDLE_SPEED_RADIANS_PER_SECOND = 0.8
 export const ACTIVE_BASE_SPEED_RADIANS_PER_SECOND = 2
-export const ACTIVE_SPEED_INCREASE_PER_HIT = 0.075
+export const ACTIVE_SPEED_INCREASE_PER_HIT = 0.065
 export const TARGET_HALF_WIDTH_RADIANS = 0.14
 // Rounded stroke caps and black outlines are visible parts of both shapes and
 // therefore count as contact. These values cover the responsive renderer's

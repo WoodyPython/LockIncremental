@@ -95,7 +95,52 @@ describe('save schema', () => {
     expect(decoded.envelope.game.upgrades['target-value']).toBe(0)
     expect(decoded.envelope.game.medalUpgrades['double-point-gain']).toBe(0)
     expect(decoded.envelope.game.statistics.completedRuns).toBe(0)
+    expect(decoded.envelope.game.selectedTierId).toBe('tier-1')
+    expect(decoded.envelope.game.tierStatistics['tier-1']).toEqual(decoded.envelope.game.statistics)
+    expect(decoded.envelope.game.tierStatistics['tier-2'].completedRuns).toBe(0)
     expect(decoded.envelope.settings).toEqual(DEFAULT_GAME_SETTINGS)
+  })
+
+  it('round-trips a revealed tier and rejects inconsistent tier state', () => {
+    const base = new GameSimulation({ initialPoints: 10_000 }).getDurableState()
+    const tierTwoState = {
+      ...base,
+      selectedTierId: 'tier-2' as const,
+      tierStatistics: {
+        ...base.tierStatistics,
+        'tier-1': { ...base.tierStatistics['tier-1'], completedRuns: 1 },
+      },
+    }
+    const envelope = createSaveEnvelope(tierTwoState, DEFAULT_GAME_SETTINGS)
+    const validated = validateSaveEnvelope(envelope)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(hydrateGameState(validated.envelope).selectedTierId).toBe('tier-2')
+
+    expect(
+      validateSaveEnvelope({
+        ...envelope,
+        game: { ...envelope.game, points: '9999', lifetimePoints: '9999' },
+      }).ok,
+    ).toBe(false)
+    expect(
+      validateSaveEnvelope({
+        ...envelope,
+        game: {
+          ...envelope.game,
+          failureCooldown: {
+            tierId: 'tier-1',
+            remainingMs: 1_000,
+            markerAngle: 0,
+            targetAngle: 1,
+            targetCritical: false,
+            targetHalfWidth: 0.1,
+            hits: 1,
+            requiredHits: 50,
+          },
+        },
+      }).ok,
+    ).toBe(false)
   })
 
   it('defaults entirely new currencies to zero', () => {

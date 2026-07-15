@@ -97,6 +97,19 @@ At minimum, show:
 
 Use the shared big-number formatting utilities for resource values. Keep comma-separated ordinary notation below one billion, then use compact exponent notation without a plus sign, such as `1.00e9`. Run hit counts may remain ordinary integers.
 
+### Lock tiers
+
+Before 10,000 lifetime Points, retain the original single-lock layout without tier labels, controls, or reserved carousel spacing, while showing the compact Tier 1 record strip from the start. At the 10,000-Point goal, reveal a two-card tier carousel around the lock.
+
+- Display a compact emblem and name for the selected tier, with only the arrow leading to an existing adjacent tier. Tier navigation never wraps.
+- Permit tier changes only while the run is idle. Support the visible buttons and Left/Right Arrow keys while focus is within the carousel.
+- Slide the incoming and outgoing locks by roughly one full card width over about 560ms, as though the tiers sit side by side beyond the viewport. Use GPU-friendly transforms and replace the transition with an immediate swap when reduced motion is requested.
+- Allow Tier 2 to be inspected at reveal time, but dim its canvas and show a prominent `Complete a Tier I Jackpot` lock marker until Tier 1 has been completed once.
+- Keep the carousel minimal: tier emblem, name, info control, canvas, directional arrow, and a compact per-tier record strip. Put each tier's unmodified base Jackpot, explicit per-hit speed growth, target half-width, Point and Jackpot reward modifiers, and tier mechanic in a modal information panel. Do not adjust those panel values for purchased upgrades or add secondary explanatory lines.
+- Show runs, hits, best run, and Jackpots beneath the canvas. Once a tier has a Jackpot, omit its best-run value because the completed requirement is already the maximum.
+- In the idle canvas, place `0 / requirement` directly beneath `Click to Play` so the selected tier's Jackpot goal is visible without opening its information panel.
+- Keep tier arrows at least 44px square beside the circle, with the chevron optically centered within its button. Overlay the buttons on the card edges at narrow widths so the circular canvas still fits a 320px viewport.
+
 ## 6. Lock Gameplay Presentation
 
 Use an HTML `<canvas>` for the lock, rotating marker, target, hit effects, and loss effects. Surrounding UI should use semantic HTML.
@@ -191,7 +204,7 @@ The loss animation must not be a rapid screen flash. Respect reduced-motion pref
 On completing all currently required hits (initially 50):
 
 - Stop active input.
-- Show a clear gold `Jackpot!` state for three seconds that cannot be confused with failure, with the completion bonus and `+1 Medal` displayed beneath the heading.
+- Show a clear gold `Jackpot!` state for three seconds that cannot be confused with failure, with the tier's completion bonus and Medal reward displayed beneath the heading.
 - Award the run reward exactly once.
 - Use gold particles, an outward ring, or a comparable celebratory animation.
 - Do not apply the failure cooldown; allow immediate replay input and otherwise return to idle after the brief celebration.
@@ -202,7 +215,7 @@ On completing all currently required hits (initially 50):
 - On completion of the first progression goal (100 lifetime Points), fade in all initial one-time upgrades together: consecutive value (100), Critical Hits (100), a three-second failure cooldown (250), 2× all Point gains (500), 20% lower speed scaling (1,000), and one forgiven miss (2,500). Feature visibility should reference goal IDs rather than duplicate numeric thresholds.
 - Consecutive value begins at 1× on the first target and scales subsequent uninterrupted targets by 1.05×. A forgiven miss skips the target without Points or hit progress, resets the streak, reverses direction, and consumes the run's allowance.
 - Critical Hits begin at 3% chance and grant 10× target Points. Roll critical status when each target spawns and keep it fixed until that target is resolved. Render critical targets gold with sparkling accents so the bonus is visible before the hit; when the system requests reduced motion, keep the gold styling and render the sparkles without animation. Critical-chance levels add 0.5 percentage points, cost `20 × 1.5^level` rounded to the nearest integer, and cap at 100%.
-- The completion bonus is 25% of the run's accumulated pre-critical target values, so critical hits do not multiply it.
+- Tier 1's completion bonus is 25% of the run's accumulated pre-critical target values; Tier 2's is 50%. Critical hits do not multiply either completion bonus.
 - Award one Medal exactly once per Jackpot. The first Medal earned permanently reveals the gold Medal readout and Medal shop for the session, even after the Medal is spent.
 - Place the Medal shop to the right of the normal upgrades behind a continuous vertical divider that crosses the horizontal separator without gaps. Match the `Point Upgrades` and `Medal Upgrades` heading typography, use gold for purchased Medal-card outlines, and leave enough edge space that outlines are never clipped. Smoothly resize the normal upgrades while the shop fades and slides in; on mobile, stack it below a horizontal divider. Disable this transition when reduced motion is requested.
 - Keep Medal cards in one fixed vertical list ordered as Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). Their effects provide a stacking 2× Point multiplier, additive 50% target-size increases, five-target requirement reductions, an additive forgiven miss, and a recorded WIP Research unlock. Snapshot target size, required hits, and Medal miss allowance when a run starts.

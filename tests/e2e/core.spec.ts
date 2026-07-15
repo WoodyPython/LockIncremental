@@ -16,6 +16,11 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await expect(page.locator('main [data-readout="points"]')).toBeVisible()
   await expect(page.locator('[data-upgrades-divider]')).toBeVisible()
   await expect(page.getByRole('button', { name: /Lock game/ })).toBeVisible()
+  await expect(page.locator('[data-tier-heading]')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Open tier information' })).toBeHidden()
+  await expect(page.getByRole('dialog', { name: 'Classic Lock' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Next lock tier' })).toBeHidden()
+  await expect(page.locator('[data-tier-record-strip]')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Point Upgrades' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Target Value' })).toBeVisible()
   const targetValue = page.getByRole('button', { name: /Target Value/ })
@@ -68,6 +73,23 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   const settingsTab = page.getByRole('tab', { name: 'Settings' })
   const mainContent = page.locator('main')
   const lockCanvas = page.locator('.lock-canvas')
+  await expect
+    .poll(() =>
+      lockCanvas.evaluate(
+        (canvas) =>
+          Number(canvas.getAttribute('width')) ===
+          Math.max(
+            1,
+            Math.floor(
+              Math.min(
+                (canvas as HTMLCanvasElement).clientWidth,
+                (canvas as HTMLCanvasElement).clientHeight,
+              ) * devicePixelRatio,
+            ),
+          ),
+      ),
+    )
+    .toBe(true)
   const canvasWidth = await lockCanvas.getAttribute('width')
   await expect(mainContent).toHaveCSS('transition-duration', '0s')
   const mainWidth = (await mainContent.boundingBox())?.width
@@ -110,6 +132,121 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await settingsTab.click()
   await expect(mainContent).toHaveCSS('transition-duration', '0s')
   expect((await mainContent.boundingBox())?.width).toBe(mobileMainWidth)
+})
+
+test('reveals a non-cyclic Tier II preview and gates play on a Tier I Jackpot', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'lock-incremental:save',
+      JSON.stringify({
+        version: 3,
+        savedAt: new Date().toISOString(),
+        game: { points: '10000', lifetimePoints: '10000' },
+        settings: {},
+      }),
+    )
+  })
+  await page.goto('/')
+
+  const next = page.getByRole('button', { name: 'Next lock tier' })
+  const activeTierBadge = page.locator('.tier-card:not(.tier-card-ghost) [data-tier-badge]')
+  await expect(activeTierBadge).toHaveText('TIER I')
+  await expect(next).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Previous lock tier' })).toBeHidden()
+  await expect(page.locator('[data-tier-record-strip]')).toBeVisible()
+  const canvasFrameBox = await page.locator('[data-tier-canvas-frame]').boundingBox()
+  const nextArrowBox = await next.boundingBox()
+  expect(canvasFrameBox).not.toBeNull()
+  expect(nextArrowBox).not.toBeNull()
+  if (canvasFrameBox !== null && nextArrowBox !== null) {
+    expect(
+      Math.abs(
+        canvasFrameBox.y + canvasFrameBox.height / 2 - (nextArrowBox.y + nextArrowBox.height / 2),
+      ),
+    ).toBeLessThanOrEqual(1)
+  }
+  await page.getByRole('button', { name: 'Open tier information' }).click()
+  const tierOneInfo = page.getByRole('dialog', { name: 'Classic Lock' })
+  await expect(tierOneInfo.locator('[data-tier-record]')).toHaveCount(0)
+  await expect(tierOneInfo.locator('[data-tier-stat="target"]')).toHaveText('0.140 rad half-width')
+  await expect(tierOneInfo.locator('[data-tier-stat="speed"]')).toHaveText('+0.065 rad/s per hit')
+  await expect(tierOneInfo.locator('small, s')).toHaveCount(0)
+  await tierOneInfo.getByRole('button', { name: 'Close tier information' }).click()
+  await next.click()
+  await expect(page.locator('.tier-card:not(.tier-card-ghost)')).toHaveAttribute(
+    'data-tier',
+    'tier-2',
+  )
+  await expect(page.locator('.tier-card-ghost')).toHaveAttribute('data-tier', 'tier-1')
+  await expect(activeTierBadge).toHaveText('TIER II')
+  await expect(page.getByText('Tier Locked', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Complete a Tier I Jackpot', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: /Lock game/ }).first()).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  )
+  await expect(next).toBeHidden()
+  const previous = page.getByRole('button', { name: 'Previous lock tier' })
+  await expect(previous).toBeHidden()
+  await expect(page.locator('[data-tier-carousel]')).toHaveClass(/is-transitioning/)
+  await expect(previous).toBeVisible({ timeout: 1_000 })
+
+  const lock = page.getByRole('button', { name: /Lock game/ }).first()
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toContainText('Tier II is locked')
+  await page.keyboard.press('ArrowLeft')
+  await expect(activeTierBadge).toHaveText('TIER I')
+})
+
+test('plays Tier II after a prior Tier I completion and honors reduced motion', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'lock-incremental:save',
+      JSON.stringify({
+        version: 3,
+        savedAt: new Date().toISOString(),
+        game: {
+          points: '10000',
+          lifetimePoints: '10000',
+          medals: '10',
+          lifetimeMedals: '10',
+          statistics: { runsStarted: 1, targetsHit: 50, bestRunHits: 50, completedRuns: 1 },
+        },
+        settings: {},
+      }),
+    )
+  })
+  await page.goto('/')
+  await expect(page.locator('[data-tier-best]')).toBeHidden()
+  await page.locator('[data-upgrade-id="speed-scaling"]').getByRole('button').click()
+  await page.locator('[data-medal-upgrade-id="larger-targets"]').getByRole('button').click()
+  await page.locator('[data-medal-upgrade-id="shorter-jackpot"]').getByRole('button').click()
+  await page.getByRole('button', { name: 'Next lock tier' }).click()
+  await expect(page.locator('[data-tier-carousel]')).not.toHaveClass(/is-transitioning/)
+  await page.getByRole('button', { name: 'Open tier information' }).click()
+  const tierInfo = page.getByRole('dialog', { name: 'Unstable Lock' })
+  await expect(tierInfo).toBeVisible()
+  await expect(tierInfo.locator('[data-tier-stat="jackpot"]')).toHaveText('75 targets')
+  await expect(tierInfo.locator('[data-tier-stat="speed"]')).toHaveText('+0.098 rad/s per hit')
+  await expect(tierInfo.locator('[data-tier-stat="target"]')).toHaveText('0.070 rad half-width')
+  await expect(tierInfo.locator('[data-tier-stat="points"]')).toHaveText('2.5× all Points')
+  await expect(tierInfo.locator('[data-tier-stat="medals"]')).toHaveText(
+    '5 Medals · 50% Point bonus',
+  )
+  await tierInfo.getByRole('button', { name: 'Close tier information' }).click()
+
+  const lock = page.getByRole('button', { name: /Lock game/ })
+  await expect(lock).toHaveAttribute('aria-disabled', 'false')
+  await lock.focus()
+  await page.keyboard.press('Space')
+  await expect(page.locator('[data-live]')).toContainText('Zero of 70')
+  await expect(page.getByRole('button', { name: 'Previous lock tier' })).toBeHidden()
 })
 
 test('persists settings and supports compressed export, import, file download, and wipe', async ({

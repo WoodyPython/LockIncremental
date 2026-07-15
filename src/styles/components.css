@@ -175,6 +175,373 @@ main.is-medal-layout {
   align-items: center;
 }
 
+.tier-carousel:not(.is-revealed),
+.tier-carousel:not(.is-revealed) .tier-card,
+.tier-carousel:not(.is-revealed) .tier-canvas-frame {
+  display: contents;
+}
+
+.tier-carousel.is-revealed {
+  position: relative;
+  display: grid;
+  width: min(100%, 820px);
+  grid-template-columns: 54px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 10px;
+  overflow: clip;
+  overflow-clip-margin: 8px;
+}
+
+.tier-card {
+  min-width: 0;
+}
+
+.tier-carousel.is-revealed .tier-card {
+  position: relative;
+  z-index: 2;
+  grid-column: 2;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  transform-origin: center;
+}
+
+.tier-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 40px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tier-heading[hidden],
+.tier-lock[hidden],
+.tier-arrow[hidden],
+.tier-record-strip[hidden],
+.tier-record-strip [hidden] {
+  display: none;
+}
+
+.tier-emblem {
+  display: inline-grid;
+  min-width: 88px;
+  min-height: 34px;
+  padding: 5px 12px;
+  place-items: center;
+  border: 2px solid var(--color-outline);
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.tier-card[data-tier='tier-2'] .tier-emblem {
+  color: var(--color-gold-light);
+  box-shadow: 0 0 0 2px var(--color-gold);
+}
+
+.tier-heading strong {
+  font-size: clamp(1rem, 3vw, 1.35rem);
+}
+
+.tier-info-button {
+  display: grid;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 2px solid var(--color-accent);
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-accent);
+  font-family: Georgia, serif;
+  font-size: 1rem;
+  font-weight: 900;
+  text-transform: none;
+}
+
+.tier-card[data-tier='tier-2'] .tier-info-button {
+  border-color: var(--color-gold);
+  color: var(--color-gold-light);
+}
+
+.tier-canvas-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.tier-carousel.is-revealed .lock-canvas {
+  width: min(70vh, 580px, 100%);
+}
+
+.tier-canvas-frame.is-locked .lock-canvas {
+  opacity: 0.3;
+  filter: saturate(0.35);
+}
+
+.tier-lock {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: min(78%, 330px);
+  display: grid;
+  gap: 6px;
+  padding: 20px;
+  place-items: center;
+  border: var(--border-width) solid var(--color-gold);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--color-goal-track);
+  color: var(--color-gold-light);
+  box-shadow: 0 6px 0 var(--color-shadow);
+  text-align: center;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.tier-lock span:last-child {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.tier-lock-icon {
+  position: relative;
+  width: 42px;
+  height: 34px;
+  margin-top: 12px;
+  border: 4px solid var(--color-gold);
+  border-radius: 5px;
+}
+
+.tier-lock-icon::before {
+  position: absolute;
+  right: 6px;
+  bottom: 26px;
+  left: 6px;
+  height: 24px;
+  border: 4px solid var(--color-gold);
+  border-bottom: 0;
+  border-radius: 18px 18px 0 0;
+  content: '';
+}
+
+.tier-arrow {
+  position: relative;
+  z-index: 6;
+  display: grid;
+  width: 52px;
+  min-height: 72px;
+  padding: 0;
+  place-items: center;
+  border-color: var(--color-accent);
+  border-radius: calc(var(--radius) + 5px);
+  background: var(--color-border);
+  color: var(--color-accent);
+  box-shadow: 0 5px 0 var(--color-shadow);
+  font-size: 0;
+}
+
+.tier-arrow::before {
+  position: absolute;
+  top: calc(50%);
+  left: 50%;
+  width: 18px;
+  height: 24px;
+  background: currentColor;
+  clip-path: polygon(0 0, 36% 0, 100% 50%, 36% 100%, 0 100%, 64% 50%);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.tier-arrow-previous::before {
+  transform: translate(-50%, -50%) scaleX(-1);
+}
+
+.tier-arrow-next::before {
+  transform: translate(-50%, -50%);
+}
+
+.tier-carousel[data-tier='tier-2'] .tier-arrow {
+  border-color: var(--color-gold);
+  color: var(--color-gold-light);
+}
+
+.tier-arrow-previous {
+  grid-column: 1;
+}
+
+.tier-arrow-next {
+  grid-column: 3;
+}
+
+.tier-info-dialog {
+  width: min(560px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  padding: 0;
+  overflow: auto;
+  border: var(--border-width) solid var(--color-accent);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 10px 0 var(--color-shadow);
+}
+
+.tier-card[data-tier='tier-2'] .tier-info-dialog {
+  border-color: var(--color-gold);
+}
+
+.tier-info-dialog::backdrop {
+  background: var(--color-shadow);
+}
+
+.tier-info-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.tier-info-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tier-info-heading span {
+  color: var(--color-accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.tier-card[data-tier='tier-2'] .tier-info-heading span,
+.tier-card[data-tier='tier-2'] .tier-info-stats dd,
+.tier-card[data-tier='tier-2'] .tier-info-mechanic strong,
+.tier-card[data-tier='tier-2'] .tier-record-strip strong {
+  color: var(--color-gold-light);
+}
+
+.tier-info-heading h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  text-transform: uppercase;
+}
+
+.tier-info-heading button {
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.7rem;
+}
+
+.tier-info-stats {
+  margin: 0;
+  padding: 4px 20px;
+}
+
+.tier-info-stats > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.65fr) minmax(0, 1fr);
+  gap: 2px 16px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tier-info-stats dt {
+  align-self: center;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tier-info-stats dd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  margin: 0;
+  color: var(--color-accent);
+  font-weight: 900;
+}
+
+.tier-info-stats dd strong {
+  color: inherit;
+}
+
+.tier-info-mechanic {
+  display: grid;
+  gap: 5px;
+  padding: 14px 20px;
+}
+
+.tier-info-mechanic span {
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tier-info-mechanic strong {
+  color: var(--color-accent);
+  font-size: 0.9rem;
+}
+
+.tier-record-strip {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 4vw, 28px);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tier-carousel:not(.is-revealed) .tier-record-strip {
+  margin-top: 8px;
+}
+
+.tier-record-strip span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tier-record-strip strong {
+  color: var(--color-accent);
+  font-size: 0.82rem;
+}
+
+.tier-card-ghost {
+  position: absolute !important;
+  inset: 0 64px auto !important;
+  z-index: 1 !important;
+  pointer-events: none;
+}
+
+.tier-carousel.is-transitioning .tier-card,
+.tier-card-ghost {
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
 .lock-canvas {
   display: block;
   width: min(70vh, 580px, 100%);

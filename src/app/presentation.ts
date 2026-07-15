@@ -23,6 +23,12 @@ export function presentActivation(
   now: number,
   hitAngle: number | null,
 ): GamePresentation {
+  if (result.kind === 'tier-locked') {
+    return {
+      announcement: 'Tier II is locked. Complete a Tier I Jackpot to play.',
+      economyChanged: false,
+    }
+  }
   if (result.kind === 'started') {
     return {
       announcement: `Run started. Zero of ${result.state.requiredHits} targets hit.`,
@@ -43,8 +49,9 @@ export function presentActivation(
     }
   }
   if (result.kind === 'completed') {
+    const medalLabel = result.medalsAwarded.eq(1) ? 'Medal' : 'Medals'
     return {
-      announcement: `Run complete. ${formatDecimal(result.reward)} Points and ${formatDecimal(result.medalsAwarded)} Medal earned.`,
+      announcement: `Run complete. ${formatDecimal(result.reward)} Points and ${formatDecimal(result.medalsAwarded)} ${medalLabel} earned.`,
       effect: 'completed',
       gain:
         hitAngle === null

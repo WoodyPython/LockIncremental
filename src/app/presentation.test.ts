@@ -8,6 +8,7 @@ import { presentActivation, presentTick } from './presentation'
 
 const active: ActiveRunState = {
   kind: 'active',
+  tierId: 'tier-1',
   markerAngle: 1,
   targetAngle: 1,
   targetCritical: false,
@@ -19,10 +20,16 @@ const active: ActiveRunState = {
   invulnerableUntil: 0,
   basePointsEarned: new Decimal(2),
   requiredHits: 50,
+  speedScalingMultiplier: 1,
+  failureCooldownMs: 5_000,
+  directionRetentionChance: 0,
+  completionMedals: 1,
+  completionBonusRate: 0.25,
 }
 
 const failed: FailedRunState = {
   kind: 'failed',
+  tierId: 'tier-1',
   markerAngle: 1,
   targetAngle: 2,
   targetCritical: true,
@@ -34,6 +41,7 @@ const failed: FailedRunState = {
 
 const completed: CompletedRunState = {
   kind: 'completed',
+  tierId: 'tier-1',
   markerAngle: 1,
   hits: 50,
   requiredHits: 50,

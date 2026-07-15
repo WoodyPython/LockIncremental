@@ -1,5 +1,9 @@
 import Decimal from 'break_infinity.js'
-import { MAX_FRAME_DELTA_SECONDS } from './constants'
+import {
+  ACTIVE_SPEED_INCREASE_PER_HIT,
+  MAX_FRAME_DELTA_SECONDS,
+  TARGET_HALF_WIDTH_RADIANS,
+} from './constants'
 import {
   activateRun,
   createIdleState,
@@ -28,6 +32,17 @@ import {
   type UpgradeId,
   type UpgradeLevels,
 } from './upgrades'
+import {
+  DEFAULT_TIER_ID,
+  EMPTY_TIER_STATISTICS,
+  TIER_DEFINITIONS,
+  tierAvailability,
+  tierDefinition,
+  type TierAvailability,
+  type EffectiveTierStats,
+  type TierId,
+  type TierStatistics,
+} from './tiers'
 
 export interface GameSnapshot {
   readonly run: RunState
@@ -38,6 +53,9 @@ export interface GameSnapshot {
   readonly upgrades: UpgradeLevels
   readonly medalUpgrades: MedalUpgradeLevels
   readonly statistics: GameStatistics
+  readonly selectedTierId: TierId
+  readonly tierStatistics: TierStatistics
+  readonly tierAvailability: Readonly<Record<TierId, TierAvailability>>
 }
 
 export interface GameStatistics {
@@ -48,6 +66,7 @@ export interface GameStatistics {
 }
 
 export interface DurableFailureCooldown {
+  readonly tierId: TierId
   readonly remainingMs: number
   readonly markerAngle: number
   readonly targetAngle: number
@@ -65,6 +84,8 @@ export interface DurableGameState {
   readonly upgrades: UpgradeLevels
   readonly medalUpgrades: MedalUpgradeLevels
   readonly statistics: GameStatistics
+  readonly selectedTierId: TierId
+  readonly tierStatistics: TierStatistics
   readonly failureCooldown?: DurableFailureCooldown
 }
 
@@ -81,6 +102,11 @@ export type GameTickResult =
   | { readonly kind: 'invulnerable'; readonly state: Extract<RunState, { kind: 'active' }> }
 
 export type GameActivationResult =
+  | {
+      readonly kind: 'tier-locked'
+      readonly state: Extract<RunState, { kind: 'idle' }>
+      readonly reward: Decimal
+    }
   | {
       readonly kind: 'started'
       readonly state: Extract<RunState, { kind: 'active' }>
@@ -125,6 +151,7 @@ export type MedalPurchaseResult =
 export interface GameSimulationOptions {
   readonly targetRandom?: () => number
   readonly criticalRandom?: () => number
+  readonly directionRandom?: () => number
   readonly initialPoints?: Decimal | number | string
   readonly initialLifetimePoints?: Decimal | number | string
   readonly initialMedals?: Decimal | number | string
@@ -144,12 +171,19 @@ export class GameSimulation {
     ...EMPTY_MEDAL_UPGRADE_LEVELS,
   }
   private statistics: GameStatistics = { ...DEFAULT_GAME_STATISTICS }
+  private selectedTierId: TierId = DEFAULT_TIER_ID
+  private tierStatistics: Record<TierId, GameStatistics> = {
+    'tier-1': { ...EMPTY_TIER_STATISTICS['tier-1'] },
+    'tier-2': { ...EMPTY_TIER_STATISTICS['tier-2'] },
+  }
   private readonly targetRandom: () => number
   private readonly criticalRandom: () => number
+  private readonly directionRandom: () => number
 
   public constructor(options: GameSimulationOptions = {}) {
     this.targetRandom = options.targetRandom ?? Math.random
     this.criticalRandom = options.criticalRandom ?? Math.random
+    this.directionRandom = options.directionRandom ?? Math.random
     if (options.initialState !== undefined) {
       const state = options.initialState
       this.currentPoints = new Decimal(state.points)
@@ -159,9 +193,15 @@ export class GameSimulation {
       Object.assign(this.upgradeLevels, state.upgrades)
       Object.assign(this.medalUpgradeLevels, state.medalUpgrades)
       this.statistics = { ...state.statistics }
+      this.selectedTierId = state.selectedTierId
+      this.tierStatistics = {
+        'tier-1': { ...state.tierStatistics['tier-1'] },
+        'tier-2': { ...state.tierStatistics['tier-2'] },
+      }
       if (state.failureCooldown !== undefined && state.failureCooldown.remainingMs > 0) {
         this.runState = {
           kind: 'failed',
+          tierId: state.failureCooldown.tierId,
           markerAngle: state.failureCooldown.markerAngle,
           targetAngle: state.failureCooldown.targetAngle,
           targetCritical: state.failureCooldown.targetCritical,
@@ -186,7 +226,6 @@ export class GameSimulation {
       clampedDelta,
       now,
       this.targetRandom,
-      this.runModifiers(),
       this.rollCriticalTarget,
     )
     this.runState = transition.state
@@ -201,6 +240,9 @@ export class GameSimulation {
   }
 
   public activate(now: number): GameActivationResult {
+    if (this.runState.kind === 'idle' && !this.selectedTierAvailability().playable) {
+      return { kind: 'tier-locked', state: this.runState, reward: new Decimal(0) }
+    }
     const targetBasePoints = this.nextTargetBasePoints()
     const targetCritical = this.runState.kind === 'active' && this.runState.targetCritical
     const transition = activateRun(
@@ -210,6 +252,7 @@ export class GameSimulation {
       this.runModifiers(),
       targetBasePoints,
       this.rollCriticalTarget,
+      this.directionRandom,
     )
     this.runState = transition.state
     this.recordTransition(transition)
@@ -246,6 +289,29 @@ export class GameSimulation {
     return this.runState
   }
 
+  public getEffectiveTierStats(tierId: TierId): EffectiveTierStats {
+    const modifiers = this.runModifiers(tierId)
+    const tier = tierDefinition(tierId)
+    const tierBaseTargetHalfWidth = TARGET_HALF_WIDTH_RADIANS * tier.targetSizeMultiplier
+    return {
+      baseRequiredHits: tier.baseRequiredHits,
+      requiredHits: modifiers.requiredHits,
+      jackpotReduction: tier.baseRequiredHits - modifiers.requiredHits,
+      baseSpeedGrowthPerHit: ACTIVE_SPEED_INCREASE_PER_HIT * tier.speedScalingMultiplier,
+      speedGrowthPerHit: ACTIVE_SPEED_INCREASE_PER_HIT * modifiers.speedScalingMultiplier,
+      baseTargetHalfWidthRadians: tierBaseTargetHalfWidth,
+      targetHalfWidthRadians: modifiers.targetHalfWidth,
+      basePointGainMultiplier: tier.pointGainMultiplier,
+      pointGainMultiplier: pointGainMultiplier(this.upgradeLevels)
+        .times(medalPointGainMultiplier(this.medalUpgradeLevels))
+        .times(tier.pointGainMultiplier)
+        .toNumber(),
+      completionMedals: tier.completionMedals,
+      completionBonusRate: tier.completionBonusRate,
+      gimmick: tier.gimmick,
+    }
+  }
+
   public getSnapshot(): GameSnapshot {
     const levels = this.snapshotLevels()
     return {
@@ -257,6 +323,9 @@ export class GameSimulation {
       upgrades: levels,
       medalUpgrades: { ...this.medalUpgradeLevels },
       statistics: { ...this.statistics },
+      selectedTierId: this.selectedTierId,
+      tierStatistics: this.snapshotTierStatistics(),
+      tierAvailability: this.snapshotTierAvailability(),
     }
   }
 
@@ -266,6 +335,7 @@ export class GameSimulation {
       const remainingMs = Math.max(0, this.runState.cooldownEndsAt - now)
       if (remainingMs > 0) {
         failureCooldown = {
+          tierId: this.runState.tierId,
           remainingMs,
           markerAngle: this.runState.markerAngle,
           targetAngle: this.runState.targetAngle,
@@ -277,7 +347,8 @@ export class GameSimulation {
       }
     } else if (this.runState.kind === 'active') {
       failureCooldown = {
-        remainingMs: this.runModifiers().failureCooldownMs,
+        tierId: this.runState.tierId,
+        remainingMs: this.runState.failureCooldownMs,
         markerAngle: this.runState.markerAngle,
         targetAngle: this.runState.targetAngle,
         targetCritical: this.runState.targetCritical,
@@ -294,6 +365,8 @@ export class GameSimulation {
       upgrades: this.snapshotLevels(),
       medalUpgrades: { ...this.medalUpgradeLevels },
       statistics: { ...this.statistics },
+      selectedTierId: this.selectedTierId,
+      tierStatistics: this.snapshotTierStatistics(),
       ...(failureCooldown === undefined ? {} : { failureCooldown }),
     }
   }
@@ -330,6 +403,7 @@ export class GameSimulation {
       .times(consecutiveMultiplier(consecutiveHits, levels['consecutive-value'] > 0))
       .times(pointGainMultiplier(levels))
       .times(medalPointGainMultiplier(this.medalUpgradeLevels))
+      .times(tierDefinition(this.selectedTierId).pointGainMultiplier)
   }
 
   private readonly rollCriticalTarget = (): boolean => {
@@ -343,6 +417,10 @@ export class GameSimulation {
         ...this.statistics,
         runsStarted: this.statistics.runsStarted + 1,
       }
+      this.updateTierRecord(transition.state.tierId, (record) => ({
+        ...record,
+        runsStarted: record.runsStarted + 1,
+      }))
       return
     }
     if (transition.kind !== 'hit' && transition.kind !== 'completed') return
@@ -352,10 +430,66 @@ export class GameSimulation {
       bestRunHits: Math.max(this.statistics.bestRunHits, transition.state.hits),
       completedRuns: this.statistics.completedRuns + (transition.kind === 'completed' ? 1 : 0),
     }
+    this.updateTierRecord(transition.state.tierId, (record) => ({
+      ...record,
+      targetsHit: record.targetsHit + 1,
+      bestRunHits: Math.max(record.bestRunHits, transition.state.hits),
+      completedRuns: record.completedRuns + (transition.kind === 'completed' ? 1 : 0),
+    }))
   }
 
-  private runModifiers(): RunModifiers {
-    return runModifiersForUpgrades(this.upgradeLevels, this.medalUpgradeLevels)
+  private runModifiers(tierId = this.selectedTierId): RunModifiers {
+    const base = runModifiersForUpgrades(this.upgradeLevels, this.medalUpgradeLevels)
+    const tier = tierDefinition(tierId)
+    const jackpotReduction = 50 - base.requiredHits
+    return {
+      ...base,
+      tierId: tier.id,
+      requiredHits: tier.baseRequiredHits - jackpotReduction,
+      targetHalfWidth: base.targetHalfWidth * tier.targetSizeMultiplier,
+      speedScalingMultiplier: base.speedScalingMultiplier * tier.speedScalingMultiplier,
+      directionRetentionChance: tier.directionRetentionChance,
+      completionMedals: tier.completionMedals,
+      completionBonusRate: tier.completionBonusRate,
+    }
+  }
+
+  public selectTier(tierId: TierId): 'selected' | 'hidden' | 'busy' {
+    if (this.runState.kind !== 'idle') return 'busy'
+    if (!this.availabilityFor(tierId).visible) return 'hidden'
+    this.selectedTierId = tierId
+    return 'selected'
+  }
+
+  private selectedTierAvailability(): TierAvailability {
+    return this.availabilityFor(this.selectedTierId)
+  }
+
+  private availabilityFor(tierId: TierId): TierAvailability {
+    return tierAvailability(tierId, {
+      lifetimePoints: this.totalPoints,
+      tierStatistics: this.snapshotTierStatistics(),
+    })
+  }
+
+  private snapshotTierAvailability(): Readonly<Record<TierId, TierAvailability>> {
+    return Object.fromEntries(
+      TIER_DEFINITIONS.map((tier) => [tier.id, this.availabilityFor(tier.id)]),
+    ) as unknown as Readonly<Record<TierId, TierAvailability>>
+  }
+
+  private snapshotTierStatistics(): TierStatistics {
+    return {
+      'tier-1': { ...this.tierStatistics['tier-1'] },
+      'tier-2': { ...this.tierStatistics['tier-2'] },
+    }
+  }
+
+  private updateTierRecord(
+    tierId: TierId,
+    update: (record: GameStatistics) => GameStatistics,
+  ): void {
+    this.tierStatistics[tierId] = update(this.tierStatistics[tierId])
   }
 
   private snapshotLevels(): UpgradeLevels {

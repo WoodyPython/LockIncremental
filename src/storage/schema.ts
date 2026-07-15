@@ -20,6 +20,15 @@ import {
   type MedalUpgradeLevels,
 } from '../game/medalUpgrades'
 import { RESULT_COOLDOWN_MS } from '../game/constants'
+import {
+  DEFAULT_TIER_ID,
+  EMPTY_TIER_STATISTICS,
+  TIER_DEFINITIONS,
+  isTierId,
+  tierAvailability,
+  type TierId,
+  type TierStatistics,
+} from '../game/tiers'
 import { deserializeDecimal, serializeDecimal } from '../utils/decimal'
 
 export const CURRENT_SAVE_VERSION = 3 as const
@@ -48,6 +57,8 @@ export interface SerializedGameState {
   readonly upgrades: Readonly<Record<UpgradeId, number>>
   readonly medalUpgrades: Readonly<Record<MedalUpgradeId, number>>
   readonly statistics: GameStatistics
+  readonly selectedTierId: TierId
+  readonly tierStatistics: TierStatistics
   readonly failureCooldown?: DurableFailureCooldown
 }
 
@@ -59,6 +70,8 @@ export const DEFAULT_SERIALIZED_GAME_STATE: SerializedGameState = {
   upgrades: EMPTY_UPGRADE_LEVELS,
   medalUpgrades: EMPTY_MEDAL_UPGRADE_LEVELS,
   statistics: DEFAULT_GAME_STATISTICS,
+  selectedTierId: DEFAULT_TIER_ID,
+  tierStatistics: EMPTY_TIER_STATISTICS,
 }
 
 export interface SaveEnvelope {
@@ -88,6 +101,11 @@ export function createSaveEnvelope(
       upgrades: { ...game.upgrades },
       medalUpgrades: { ...game.medalUpgrades },
       statistics: { ...game.statistics },
+      selectedTierId: game.selectedTierId,
+      tierStatistics: {
+        'tier-1': { ...game.tierStatistics['tier-1'] },
+        'tier-2': { ...game.tierStatistics['tier-2'] },
+      },
       ...(game.failureCooldown === undefined
         ? {}
         : { failureCooldown: { ...game.failureCooldown } }),
@@ -108,6 +126,11 @@ export function hydrateGameState(envelope: SaveEnvelope, loadedAt = new Date()):
     upgrades: { ...game.upgrades },
     medalUpgrades: { ...game.medalUpgrades },
     statistics: { ...game.statistics },
+    selectedTierId: game.selectedTierId,
+    tierStatistics: {
+      'tier-1': { ...game.tierStatistics['tier-1'] },
+      'tier-2': { ...game.tierStatistics['tier-2'] },
+    },
     ...(game.failureCooldown === undefined || cooldownRemainingMs <= 0
       ? {}
       : {
@@ -170,8 +193,33 @@ export function validateSaveEnvelope(value: unknown): SaveValidationResult {
     valueOrDefault(value.game, 'statistics', DEFAULT_SERIALIZED_GAME_STATE.statistics),
   )
   if (typeof statistics === 'string') return invalid(statistics)
+  const selectedTierIdValue = valueOrDefault(
+    value.game,
+    'selectedTierId',
+    DEFAULT_SERIALIZED_GAME_STATE.selectedTierId,
+  )
+  if (!isTierId(selectedTierIdValue)) return invalid('The selected lock tier is invalid.')
+  const tierStatistics = validateTierStatistics(value.game.tierStatistics, statistics)
+  if (typeof tierStatistics === 'string') return invalid(tierStatistics)
+  const selectedAvailability = tierAvailability(selectedTierIdValue, {
+    lifetimePoints,
+    tierStatistics,
+  })
+  if (!selectedAvailability.visible) return invalid('The selected lock tier has not been revealed.')
   const failureCooldown = validateFailureCooldown(value.game.failureCooldown)
   if (typeof failureCooldown === 'string') return invalid(failureCooldown)
+  if (failureCooldown !== undefined) {
+    if (failureCooldown.tierId !== selectedTierIdValue) {
+      return invalid('Failure cooldown tier does not match the selected tier.')
+    }
+    const failureAvailability = tierAvailability(failureCooldown.tierId, {
+      lifetimePoints,
+      tierStatistics,
+    })
+    if (!failureAvailability.playable) {
+      return invalid('Failure cooldown belongs to an unavailable tier.')
+    }
+  }
   const settings = validateSettings(value.settings)
   if (typeof settings === 'string') return invalid(settings)
 
@@ -188,6 +236,8 @@ export function validateSaveEnvelope(value: unknown): SaveValidationResult {
         upgrades,
         medalUpgrades,
         statistics,
+        selectedTierId: selectedTierIdValue,
+        tierStatistics,
         ...(failureCooldown === undefined ? {} : { failureCooldown }),
       },
       settings,
@@ -198,6 +248,8 @@ export function validateSaveEnvelope(value: unknown): SaveValidationResult {
 function validateFailureCooldown(value: unknown): DurableFailureCooldown | string | undefined {
   if (value === undefined) return undefined
   if (!isRecord(value)) return 'Failure cooldown data is invalid.'
+  const tierId = valueOrDefault(value, 'tierId', DEFAULT_TIER_ID)
+  if (!isTierId(tierId)) return 'Failure cooldown tier is invalid.'
   const finiteFields = ['remainingMs', 'markerAngle', 'targetAngle', 'targetHalfWidth'] as const
   for (const field of finiteFields) {
     if (typeof value[field] !== 'number' || !Number.isFinite(value[field])) {
@@ -222,6 +274,7 @@ function validateFailureCooldown(value: unknown): DurableFailureCooldown | strin
     return 'Failure cooldown progress is inconsistent.'
   }
   return {
+    tierId,
     remainingMs: value.remainingMs as number,
     markerAngle: value.markerAngle as number,
     targetAngle: value.targetAngle as number,
@@ -230,6 +283,26 @@ function validateFailureCooldown(value: unknown): DurableFailureCooldown | strin
     hits: value.hits,
     requiredHits: value.requiredHits,
   }
+}
+
+function validateTierStatistics(
+  value: unknown,
+  legacyStatistics: GameStatistics,
+): TierStatistics | string {
+  if (value === undefined) {
+    return {
+      'tier-1': { ...legacyStatistics },
+      'tier-2': { ...EMPTY_TIER_STATISTICS['tier-2'] },
+    }
+  }
+  if (!isRecord(value)) return 'Tier statistics are invalid.'
+  const normalized = {} as Record<TierId, GameStatistics>
+  for (const tier of TIER_DEFINITIONS) {
+    const record = validateStatistics(value[tier.id])
+    if (typeof record === 'string') return `Tier ${tier.numeral} statistics are invalid.`
+    normalized[tier.id] = record
+  }
+  return normalized
 }
 
 function validateUpgradeLevels(value: unknown): UpgradeLevels | string {

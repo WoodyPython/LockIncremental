@@ -90,7 +90,7 @@ export class LockRenderer {
     this.clearEffects()
   }
 
-  public render(run: RunState, now: number): void {
+  public render(run: RunState, now: number, idleRequiredHits = 50): void {
     const size = this.resizeCanvas()
     const palette = this.palette ?? (this.palette = this.readPalette())
     const { context } = this
@@ -137,7 +137,7 @@ export class LockRenderer {
     }
 
     this.drawBar(run.markerAngle, center, radius, palette)
-    this.drawCenterText(run, now, center, size, palette)
+    this.drawCenterText(run, now, center, size, palette, idleRequiredHits)
     this.drawPulse(center, radius, effectAge, palette)
     if (run.kind === 'completed') {
       this.drawWinCelebration(run.completedAt, now, center, radius, palette)
@@ -254,6 +254,7 @@ export class LockRenderer {
     center: number,
     size: number,
     palette: Palette,
+    idleRequiredHits: number,
   ): void {
     let heading: string
     let color = palette.text
@@ -281,7 +282,11 @@ export class LockRenderer {
     this.context.font = `800 ${Math.max(28, size * 0.09)}px system-ui, sans-serif`
     this.context.fillText(heading, center, center, size * 0.62)
 
-    if (run.kind === 'failed' && cooldownRemainingMs(run, now) > 0) {
+    if (run.kind === 'idle') {
+      this.context.fillStyle = palette.muted
+      this.context.font = `800 ${Math.max(15, size * 0.038)}px system-ui, sans-serif`
+      this.context.fillText(`0 / ${idleRequiredHits}`, center, center + size * 0.09)
+    } else if (run.kind === 'failed' && cooldownRemainingMs(run, now) > 0) {
       this.context.fillStyle = palette.muted
       this.context.font = `700 ${Math.max(12, size * 0.03)}px system-ui, sans-serif`
       this.context.fillText(`SCORE ${run.hits} / ${run.requiredHits}`, center, center + size * 0.09)
@@ -302,7 +307,7 @@ export class LockRenderer {
         center + size * 0.085,
       )
       this.context.fillText(
-        `+${formatDecimal(run.medalsAwarded)} MEDAL`,
+        `+${formatDecimal(run.medalsAwarded)} ${run.medalsAwarded.eq(1) ? 'MEDAL' : 'MEDALS'}`,
         center,
         center + size * 0.135,
       )

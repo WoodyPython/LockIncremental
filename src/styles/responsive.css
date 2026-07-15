@@ -17,6 +17,54 @@
     width: 100%;
   }
 
+  .tier-carousel.is-revealed {
+    display: block;
+  }
+
+  .tier-carousel.is-revealed .tier-card {
+    padding: 0;
+  }
+
+  .tier-arrow {
+    position: absolute;
+    top: 50%;
+    width: 44px;
+    min-height: 60px;
+    border-radius: 0 var(--radius) var(--radius) 0;
+    transform: translateY(-50%);
+  }
+
+  .tier-arrow:active:not(:disabled) {
+    transform: translateY(calc(-50% + 1px));
+  }
+
+  .tier-arrow-previous {
+    left: 8px;
+  }
+
+  .tier-arrow-next {
+    right: 8px;
+    border-radius: var(--radius) 0 0 var(--radius);
+  }
+
+  .tier-info-stats > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .tier-info-stats dt {
+    grid-row: auto;
+  }
+
+  .tier-info-heading > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .tier-card-ghost {
+    inset: 0 !important;
+  }
+
   .upgrade-grid {
     grid-template-columns: 1fr;
   }
@@ -116,7 +164,8 @@
   .progression-resources,
   .progression-medals,
   .upgrades-layout,
-  .medal-upgrades {
+  .medal-upgrades,
+  .tier-card {
     transition: none;
   }
 }

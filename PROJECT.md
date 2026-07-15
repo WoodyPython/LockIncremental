@@ -179,13 +179,15 @@ The initial economy is based on one Point per successful target and a completion
 - The first Jackpot reveals a gold Medal shop and awards one Medal. Its fixed one-per-row order is Golden Gains (1), Larger Targets (1), Shorter Jackpot (2), Golden Safety Net (3), Jackpot Mastery (5), and Research (10). These upgrades respectively add a stacking 2× Point multiplier, up to 100% additive target size, up to ten fewer required targets, one additive forgiven miss, and a recorded WIP Research unlock.
 - Shorter Jackpot reveals Rapid Recovery (10,000 Points), which halves the effective failure cooldown, and Efficient Scaling (25,000), which reduces the growth portion of repeatable cost bases by 25%.
 - Goals track 100, 10,000, and 1,000,000 lifetime Points in order.
+- Reaching 10,000 lifetime Points reveals the ordered lock-tier carousel. Tier 2 can be previewed immediately, but it requires at least one completed Tier 1 Jackpot before play.
+- Show the selected tier's compact run, hit, best-run, and Jackpot records from the beginning; the carousel controls and tier information remain tied to the 10,000-Point reveal.
+- Tier 2 requires 75 targets, has 50% faster per-hit speed growth, a target zone half as large, 2.5× Point gains, a 50% completion Point bonus, and five Medals per Jackpot. After each non-final hit it has a 50% chance to retain direction instead of reversing. Existing upgrades compose with these tier modifiers.
 
 All economy values must be data-driven and use `Decimal` where growth can become large.
 
 Potential future systems, not required initially:
 
 - Prestige or reset layer
-- Multiple lock tiers
 - Challenge modifiers
 - Combo or streak rewards
 - Unlockable gameplay variations

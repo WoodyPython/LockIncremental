@@ -12,21 +12,30 @@ import {
   hitToleranceForTargetHalfWidth,
 } from './constants'
 import { advanceAngle, didPassTarget, isWithinTarget, placeTarget, type Direction } from './math'
+import type { TierId } from './tiers'
 
 export interface RunModifiers {
+  readonly tierId: TierId
   readonly missesPerRun: number
   readonly failureCooldownMs: number
   readonly speedScalingMultiplier: number
   readonly requiredHits: number
   readonly targetHalfWidth: number
+  readonly directionRetentionChance: number
+  readonly completionMedals: number
+  readonly completionBonusRate: number
 }
 
 export const DEFAULT_RUN_MODIFIERS: RunModifiers = {
+  tierId: 'tier-1',
   missesPerRun: 0,
   failureCooldownMs: RESULT_COOLDOWN_MS,
   speedScalingMultiplier: 1,
   requiredHits: REQUIRED_HITS,
   targetHalfWidth: TARGET_HALF_WIDTH_RADIANS,
+  directionRetentionChance: 0,
+  completionMedals: JACKPOT_MEDAL_REWARD,
+  completionBonusRate: COMPLETION_BONUS_RATE,
 }
 
 export interface IdleRunState {
@@ -36,6 +45,7 @@ export interface IdleRunState {
 
 export interface ActiveRunState {
   readonly kind: 'active'
+  readonly tierId: TierId
   readonly markerAngle: number
   readonly targetAngle: number
   readonly targetCritical: boolean
@@ -47,10 +57,16 @@ export interface ActiveRunState {
   readonly invulnerableUntil: number
   readonly basePointsEarned: Decimal
   readonly requiredHits: number
+  readonly speedScalingMultiplier: number
+  readonly failureCooldownMs: number
+  readonly directionRetentionChance: number
+  readonly completionMedals: number
+  readonly completionBonusRate: number
 }
 
 export interface FailedRunState {
   readonly kind: 'failed'
+  readonly tierId: TierId
   readonly markerAngle: number
   readonly targetAngle: number
   readonly targetCritical: boolean
@@ -62,6 +78,7 @@ export interface FailedRunState {
 
 export interface CompletedRunState {
   readonly kind: 'completed'
+  readonly tierId: TierId
   readonly markerAngle: number
   readonly hits: number
   readonly requiredHits: number
@@ -103,6 +120,7 @@ export function startRun(
 ): ActiveRunState {
   return {
     kind: 'active',
+    tierId: modifiers.tierId,
     markerAngle,
     targetAngle: placeTarget(markerAngle, direction, random, 0),
     targetCritical: rollCriticalTarget(),
@@ -114,6 +132,11 @@ export function startRun(
     invulnerableUntil: 0,
     basePointsEarned: new Decimal(0),
     requiredHits: modifiers.requiredHits,
+    speedScalingMultiplier: modifiers.speedScalingMultiplier,
+    failureCooldownMs: modifiers.failureCooldownMs,
+    directionRetentionChance: modifiers.directionRetentionChance,
+    completionMedals: modifiers.completionMedals,
+    completionBonusRate: modifiers.completionBonusRate,
   }
 }
 
@@ -150,7 +173,6 @@ export function tickRunState(
   deltaSeconds: number,
   now = 0,
   random: () => number = Math.random,
-  modifiers: RunModifiers = DEFAULT_RUN_MODIFIERS,
   rollCriticalTarget: () => boolean = NEVER_CRITICAL,
 ): TickTransition {
   if (state.kind === 'idle') {
@@ -175,7 +197,7 @@ export function tickRunState(
     const nextMarkerAngle = advanceAngle(
       state.markerAngle,
       state.direction,
-      activeSpeedForHits(state.hits, modifiers.speedScalingMultiplier),
+      activeSpeedForHits(state.hits, state.speedScalingMultiplier),
       deltaSeconds,
     )
     const movedState = { ...state, markerAngle: nextMarkerAngle }
@@ -206,13 +228,14 @@ export function tickRunState(
       kind: 'passed-target',
       state: {
         kind: 'failed',
+        tierId: state.tierId,
         markerAngle: nextMarkerAngle,
         targetAngle: state.targetAngle,
         targetCritical: state.targetCritical,
         targetHalfWidth: state.targetHalfWidth,
         hits: state.hits,
         requiredHits: state.requiredHits,
-        cooldownEndsAt: now + modifiers.failureCooldownMs,
+        cooldownEndsAt: now + state.failureCooldownMs,
       },
     }
   }
@@ -233,6 +256,7 @@ export function activateRun(
   modifiers: RunModifiers = DEFAULT_RUN_MODIFIERS,
   targetBasePoints = new Decimal(1),
   rollCriticalTarget: () => boolean = NEVER_CRITICAL,
+  directionRandom: () => number = Math.random,
 ): ActivationTransition {
   if (state.kind === 'idle') {
     return {
@@ -275,13 +299,14 @@ export function activateRun(
       kind: 'miss',
       state: {
         kind: 'failed',
+        tierId: state.tierId,
         markerAngle: state.markerAngle,
         targetAngle: state.targetAngle,
         targetCritical: state.targetCritical,
         targetHalfWidth: state.targetHalfWidth,
         hits: state.hits,
         requiredHits: state.requiredHits,
-        cooldownEndsAt: now + modifiers.failureCooldownMs,
+        cooldownEndsAt: now + state.failureCooldownMs,
       },
     }
   }
@@ -293,18 +318,25 @@ export function activateRun(
       kind: 'completed',
       state: {
         kind: 'completed',
+        tierId: state.tierId,
         markerAngle: state.markerAngle,
         hits: nextHits,
         requiredHits: state.requiredHits,
         completedAt: now,
         celebrationEndsAt: now + COMPLETION_CELEBRATION_MS,
-        completionBonus: nextBasePoints.times(COMPLETION_BONUS_RATE),
-        medalsAwarded: new Decimal(JACKPOT_MEDAL_REWARD),
+        completionBonus: nextBasePoints.times(state.completionBonusRate),
+        medalsAwarded: new Decimal(state.completionMedals),
       },
     }
   }
 
-  const nextDirection: Direction = state.direction === 1 ? -1 : 1
+  const retainsDirection =
+    state.directionRetentionChance > 0 && directionRandom() < state.directionRetentionChance
+  const nextDirection: Direction = retainsDirection
+    ? state.direction
+    : state.direction === 1
+      ? -1
+      : 1
   return {
     kind: 'hit',
     state: {

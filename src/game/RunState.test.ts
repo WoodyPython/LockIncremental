@@ -14,7 +14,6 @@ import {
   createIdleState,
   tickRunState,
   type ActiveRunState,
-  type RunModifiers,
 } from './RunState'
 
 const random = (): number => 0
@@ -22,6 +21,7 @@ const random = (): number => 0
 function hittableState(overrides: Partial<ActiveRunState> = {}): ActiveRunState {
   return {
     kind: 'active',
+    tierId: 'tier-1',
     markerAngle: 1,
     targetAngle: 1,
     targetCritical: false,
@@ -33,6 +33,11 @@ function hittableState(overrides: Partial<ActiveRunState> = {}): ActiveRunState 
     invulnerableUntil: 0,
     basePointsEarned: new Decimal(0),
     requiredHits: REQUIRED_HITS,
+    speedScalingMultiplier: 1,
+    failureCooldownMs: RESULT_COOLDOWN_MS,
+    directionRetentionChance: 0,
+    completionMedals: 1,
+    completionBonusRate: 0.25,
     ...overrides,
   }
 }
@@ -69,6 +74,35 @@ describe('run state transitions', () => {
     expect(result.state.consecutiveHits).toBe(1)
     expect(result.state.basePointsEarned.eq(2)).toBe(true)
     expect(result.state.targetCritical).toBe(true)
+  })
+
+  it('uses the tier direction roll at the exact 50% boundary', () => {
+    const state = hittableState({ directionRetentionChance: 0.5 })
+    const retained = activateRun(
+      state,
+      0,
+      random,
+      DEFAULT_RUN_MODIFIERS,
+      new Decimal(1),
+      () => false,
+      () => 0.49,
+    )
+    expect(retained.kind).toBe('hit')
+    if (retained.kind !== 'hit') throw new Error('Expected a successful hit')
+    expect(retained.state.direction).toBe(1)
+
+    const reversed = activateRun(
+      state,
+      0,
+      random,
+      DEFAULT_RUN_MODIFIERS,
+      new Decimal(1),
+      () => false,
+      () => 0.5,
+    )
+    expect(reversed.kind).toBe('hit')
+    if (reversed.kind !== 'hit') throw new Error('Expected a successful hit')
+    expect(reversed.state.direction).toBe(-1)
   })
 
   it('accepts an input when only the visible outlines touch', () => {
@@ -150,12 +184,15 @@ describe('run state transitions', () => {
   })
 
   it('fails immediately without an allowance and uses the configured cooldown', () => {
-    const modifiers: RunModifiers = { ...DEFAULT_RUN_MODIFIERS, failureCooldownMs: 3_000 }
     const result = activateRun(
-      hittableState({ targetAngle: 3, targetCritical: true, hits: 7 }),
+      hittableState({
+        targetAngle: 3,
+        targetCritical: true,
+        hits: 7,
+        failureCooldownMs: 3_000,
+      }),
       1_000,
       random,
-      modifiers,
     )
     expect(result.kind).toBe('miss')
     if (result.kind !== 'miss') throw new Error('Expected a failed run')
@@ -211,11 +248,8 @@ describe('run state transitions', () => {
 
   it('applies the speed-scaling modifier without changing base speed', () => {
     const state = hittableState({ markerAngle: 0, targetAngle: 3, hits: 10 })
-    const normal = tickRunState(state, 0.05, 0, random, DEFAULT_RUN_MODIFIERS).state
-    const reduced = tickRunState(state, 0.05, 0, random, {
-      ...DEFAULT_RUN_MODIFIERS,
-      speedScalingMultiplier: 0.8,
-    }).state
+    const normal = tickRunState(state, 0.05, 0, random).state
+    const reduced = tickRunState({ ...state, speedScalingMultiplier: 0.8 }, 0.05, 0, random).state
     expect(normal.markerAngle).toBeGreaterThan(reduced.markerAngle)
   })
 })
