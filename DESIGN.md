@@ -306,7 +306,7 @@ Center the enlarged version label immediately above a nearly full-width, 42px-ta
 
 Display the game name and semantic version, for example:
 
-`Lock Incremental v0.1.1 by WoodyPython`
+`Lock Incremental v0.1.2 by WoodyPython`
 
 Keep the version in one source of truth and inject or import it where displayed.
 

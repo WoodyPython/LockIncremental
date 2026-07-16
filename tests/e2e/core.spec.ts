@@ -4,7 +4,7 @@ test('loads the shell and switches tabs without navigation', async ({ page }) =>
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.goto('/')
 
-  await expect(page.getByText('Lock Incremental v0.1.1 by WoodyPython')).toBeVisible()
+  await expect(page.getByText('Lock Incremental v0.1.2 by WoodyPython')).toBeVisible()
   await expect(page.getByText('Points', { exact: true })).toBeVisible()
   await expect(page.locator('.progression-points')).toContainText(/0\s*Points/)
   await expect(page.getByText('Medal Upgrades')).toBeHidden()
