@@ -423,8 +423,9 @@ test('does not replay unlocked Point upgrade reveals after a page reload', async
 })
 
 test('defines a smooth Medal shop reveal with a mobile divider fallback', async ({ page }) => {
-  await page.setViewportSize({ width: 1000, height: 800 })
+  await page.setViewportSize({ width: 1400, height: 800 })
   await page.goto('/')
+  const mainContent = page.locator('.main-content')
   const layout = page.locator('.upgrades-layout')
   const progressionLayout = page.locator('.progression-layout')
   const resources = page.locator('.progression-resources')
@@ -433,6 +434,9 @@ test('defines a smooth Medal shop reveal with a mobile divider fallback', async 
   await expect(medalShop).toHaveCSS('visibility', 'hidden')
   await layout.evaluate((element) => {
     element.classList.add('is-medal-unlocked')
+  })
+  await mainContent.evaluate((element) => {
+    element.classList.add('is-medal-layout')
   })
   await resources.evaluate((element) => {
     element.classList.add('has-medals')
@@ -449,6 +453,18 @@ test('defines a smooth Medal shop reveal with a mobile divider fallback', async 
   await expect(medalShop).toHaveCSS('visibility', 'visible')
   await expect(medalShop).toHaveCSS('border-left-width', '0px')
   await page.waitForTimeout(550)
+  expect((await mainContent.boundingBox())?.width).toBeGreaterThan(1200)
+
+  const repeatableFill = await page.evaluate(() => {
+    const grid = document.querySelector<HTMLElement>(
+      '[data-upgrade-kind="multi-buy"] .upgrade-grid',
+    )
+    if (grid === null) throw new Error('Missing repeatable Point upgrade grid')
+    const card = grid.querySelector<HTMLElement>('[data-upgrade-id="target-value"]')
+    if (card === null) throw new Error('Missing repeatable Point upgrade card')
+    return Math.abs(grid.getBoundingClientRect().width - card.getBoundingClientRect().width)
+  })
+  expect(repeatableFill).toBeLessThan(1)
 
   const dividerContinuity = await page.evaluate(() => {
     const medals = document.querySelector<HTMLElement>('.progression-medals')
@@ -486,21 +502,42 @@ test('defines a smooth Medal shop reveal with a mobile divider fallback', async 
   expect(medalOrder.map(({ id }) => id)).toEqual([
     'double-point-gain',
     'larger-targets',
+    'point-expansion',
     'shorter-jackpot',
     'golden-safety-net',
+    'golden-control',
     'jackpot-mastery',
     'research',
   ])
   const firstMedal = medalOrder[0]
   expect(firstMedal).toBeDefined()
   if (firstMedal === undefined) throw new Error('Expected Medal upgrades')
-  expect(medalOrder.every(({ left }) => Math.abs(left - firstMedal.left) < 1)).toBe(true)
-  expect(
-    medalOrder.every(({ top }, index) => {
-      const previous = medalOrder[index - 1]
-      return previous === undefined || top > previous.top
-    }),
-  ).toBe(true)
+  for (let index = 0; index < medalOrder.length; index += 2) {
+    const leftCard = medalOrder[index]
+    const rightCard = medalOrder[index + 1]
+    expect(leftCard).toBeDefined()
+    expect(rightCard).toBeDefined()
+    if (leftCard === undefined || rightCard === undefined) continue
+    expect(Math.abs(leftCard.top - rightCard.top)).toBeLessThan(1)
+    expect(rightCard.left).toBeGreaterThan(leftCard.left)
+    const previousRow = medalOrder[index - 2]
+    if (previousRow !== undefined) expect(leftCard.top).toBeGreaterThan(previousRow.top)
+  }
+
+  const pointCards = await page
+    .locator('[data-upgrade-kind="one-time"] .upgrade-card:not([hidden])')
+    .evaluateAll((cards) =>
+      cards.map((card) => ({
+        top: card.getBoundingClientRect().top,
+        left: card.getBoundingClientRect().left,
+      })),
+    )
+  expect(pointCards.length).toBeGreaterThanOrEqual(6)
+  expect(Math.abs((pointCards[0]?.top ?? 0) - (pointCards[1]?.top ?? 1))).toBeLessThan(1)
+  expect(Math.abs((pointCards[1]?.top ?? 0) - (pointCards[2]?.top ?? 1))).toBeLessThan(1)
+  expect(pointCards[1]?.left).toBeGreaterThan(pointCards[0]?.left ?? 0)
+  expect(pointCards[2]?.left).toBeGreaterThan(pointCards[1]?.left ?? 0)
+  expect(pointCards[3]?.top).toBeGreaterThan(pointCards[0]?.top ?? 0)
 
   const pointSectionGap = await page.evaluate(() => {
     const sections = document.querySelectorAll<HTMLElement>('.upgrades > .upgrade-section')

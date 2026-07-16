@@ -400,7 +400,13 @@ export class GameSimulation {
     const levels = this.snapshotLevels()
     const consecutiveHits = this.runState.kind === 'active' ? this.runState.consecutiveHits : 0
     return targetValueMultiplier(levels['target-value'])
-      .times(consecutiveMultiplier(consecutiveHits, levels['consecutive-value'] > 0))
+      .times(
+        consecutiveMultiplier(
+          consecutiveHits,
+          levels['consecutive-value'] > 0,
+          levels['shielded-streak'] > 0,
+        ),
+      )
       .times(pointGainMultiplier(levels))
       .times(medalPointGainMultiplier(this.medalUpgradeLevels))
       .times(tierDefinition(this.selectedTierId).pointGainMultiplier)

@@ -6,6 +6,7 @@ import {
   EMPTY_MEDAL_UPGRADE_LEVELS,
   medalMissesPerRun,
   medalRequiredHits,
+  medalSpeedScalingMultiplier,
   medalTargetHalfWidth,
   type MedalUpgradeId,
   type MedalUpgradeLevels,
@@ -23,6 +24,7 @@ export type UpgradeId =
   | 'critical-chance'
   | 'rapid-recovery'
   | 'efficient-scaling'
+  | 'shielded-streak'
 
 export type UpgradeKind = 'multi-buy' | 'one-time'
 
@@ -60,6 +62,7 @@ export const EMPTY_UPGRADE_LEVELS: UpgradeLevels = {
   'critical-chance': 0,
   'rapid-recovery': 0,
   'efficient-scaling': 0,
+  'shielded-streak': 0,
 }
 
 const ONE_TIME_UNLOCK: UnlockRequirement = {
@@ -68,7 +71,7 @@ const ONE_TIME_UNLOCK: UnlockRequirement = {
 }
 
 export const CRITICAL_REWARD_MULTIPLIER = new Decimal(10)
-export const CRITICAL_BASE_CHANCE = 0.03
+export const CRITICAL_BASE_CHANCE = 0.05
 export const CRITICAL_CHANCE_PER_LEVEL = 0.005
 export const CRITICAL_MAX_CHANCE = 1
 export const MAX_CRITICAL_CHANCE_LEVEL = Math.round(
@@ -78,6 +81,8 @@ export const MISSES_PER_RUN_UPGRADED = 1
 export const FAILURE_COOLDOWN_UPGRADED_MS = 3_000
 export const SPEED_SCALING_UPGRADED_MULTIPLIER = 0.8
 export const REPEATABLE_GROWTH_REDUCTION = 0.75
+export const CONSECUTIVE_MULTIPLIER = 1.05
+export const SHIELDED_CONSECUTIVE_MULTIPLIER = 1.07
 
 export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
   {
@@ -108,7 +113,8 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     id: 'critical-hits',
     kind: 'one-time',
     name: 'Critical Hits',
-    description: 'Unlock a 3% chance for targets to award 10× Points.',
+    description:
+      'Unlock a 5% chance for targets to award 10× Points and unlock the Critical Chance Point upgrade.',
     baseCost: new Decimal(100),
     unlockRequirement: ONE_TIME_UNLOCK,
   },
@@ -151,7 +157,7 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     name: 'Rapid Recovery',
     description: 'Halve the effective failure cooldown.',
     baseCost: new Decimal(10_000),
-    medalPrerequisiteId: 'shorter-jackpot',
+    medalPrerequisiteId: 'point-expansion',
   },
   {
     id: 'efficient-scaling',
@@ -159,7 +165,16 @@ export const UPGRADE_DEFINITIONS: readonly UpgradeDefinition[] = [
     name: 'Efficient Scaling',
     description: 'Reduce repeatable upgrade cost scaling by 25%.',
     baseCost: new Decimal(25_000),
-    medalPrerequisiteId: 'shorter-jackpot',
+    medalPrerequisiteId: 'point-expansion',
+  },
+  {
+    id: 'shielded-streak',
+    kind: 'one-time',
+    name: 'Shielded Momentum',
+    description:
+      'Shields preserve consecutive streaks and improve their scaling from 1.05× to 1.07×.',
+    baseCost: new Decimal(100_000),
+    medalPrerequisiteId: 'point-expansion',
   },
 ]
 
@@ -243,8 +258,15 @@ export function targetValueMultiplier(level: number): Decimal {
   return new Decimal(1).plus(new Decimal(0.25).times(level))
 }
 
-export function consecutiveMultiplier(consecutiveHits: number, unlocked: boolean): Decimal {
-  return unlocked ? new Decimal(1.05).pow(consecutiveHits) : new Decimal(1)
+export function consecutiveMultiplier(
+  consecutiveHits: number,
+  unlocked: boolean,
+  shieldedMomentum = false,
+): Decimal {
+  if (!unlocked) return new Decimal(1)
+  return new Decimal(
+    shieldedMomentum ? SHIELDED_CONSECUTIVE_MULTIPLIER : CONSECUTIVE_MULTIPLIER,
+  ).pow(consecutiveHits)
 }
 
 export function pointGainMultiplier(levels: UpgradeLevels): Decimal {
@@ -268,6 +290,7 @@ export function runModifiersForUpgrades(
   readonly speedScalingMultiplier: number
   readonly requiredHits: number
   readonly targetHalfWidth: number
+  readonly preserveStreakOnShield: boolean
 } {
   const baseFailureCooldown =
     levels['fail-cooldown'] > 0 ? FAILURE_COOLDOWN_UPGRADED_MS : RESULT_COOLDOWN_MS
@@ -276,8 +299,11 @@ export function runModifiersForUpgrades(
       (levels['miss-allowance'] > 0 ? MISSES_PER_RUN_UPGRADED : 0) + medalMissesPerRun(medalLevels),
     failureCooldownMs:
       levels['rapid-recovery'] > 0 ? baseFailureCooldown * 0.5 : baseFailureCooldown,
-    speedScalingMultiplier: levels['speed-scaling'] > 0 ? SPEED_SCALING_UPGRADED_MULTIPLIER : 1,
+    speedScalingMultiplier:
+      (levels['speed-scaling'] > 0 ? SPEED_SCALING_UPGRADED_MULTIPLIER : 1) *
+      medalSpeedScalingMultiplier(medalLevels),
     requiredHits: medalRequiredHits(medalLevels),
     targetHalfWidth: medalTargetHalfWidth(medalLevels),
+    preserveStreakOnShield: levels['shielded-streak'] > 0,
   }
 }

@@ -65,7 +65,10 @@
     inset: 0 !important;
   }
 
-  .upgrade-grid {
+  .upgrade-grid,
+  .upgrades .upgrade-grid,
+  .upgrades [data-upgrade-kind='multi-buy'] .upgrade-grid,
+  .medal-upgrades .upgrade-grid {
     grid-template-columns: 1fr;
   }
 

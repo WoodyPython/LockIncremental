@@ -166,7 +166,7 @@ main {
 }
 
 main.is-medal-layout {
-  max-width: 1200px;
+  max-width: 1600px;
 }
 
 .game-stage {
@@ -610,7 +610,7 @@ main.is-medal-layout {
 }
 
 .medal-upgrades .upgrade-grid {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .medal-upgrade-card button:not(:disabled) {
@@ -641,6 +641,14 @@ main.is-medal-layout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
+}
+
+.upgrades .upgrade-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.upgrades [data-upgrade-kind='multi-buy'] .upgrade-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
 }
 
 .upgrade-card {

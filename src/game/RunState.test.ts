@@ -38,6 +38,7 @@ function hittableState(overrides: Partial<ActiveRunState> = {}): ActiveRunState 
     directionRetentionChance: 0,
     completionMedals: 1,
     completionBonusRate: 0.25,
+    preserveStreakOnShield: false,
     ...overrides,
   }
 }
@@ -181,6 +182,24 @@ describe('run state transitions', () => {
 
     expect(activateRun(result.state, 1_999, random).kind).toBe('invulnerable')
     expect(activateRun(result.state, 2_000, random).kind).toBe('miss')
+  })
+
+  it('preserves the snapshotted streak when a Shielded Momentum miss is forgiven', () => {
+    const result = activateRun(
+      hittableState({
+        targetAngle: 3,
+        hits: 7,
+        consecutiveHits: 4,
+        missesRemaining: 1,
+        preserveStreakOnShield: true,
+      }),
+      1_000,
+      random,
+    )
+    expect(result.kind).toBe('forgiven-miss')
+    if (result.kind !== 'forgiven-miss') throw new Error('Expected a forgiven miss')
+    expect(result.state.hits).toBe(7)
+    expect(result.state.consecutiveHits).toBe(4)
   })
 
   it('fails immediately without an allowance and uses the configured cooldown', () => {

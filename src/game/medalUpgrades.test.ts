@@ -6,6 +6,7 @@ import {
   medalMissesPerRun,
   medalPointGainMultiplier,
   medalRequiredHits,
+  medalSpeedScalingMultiplier,
   medalTargetHalfWidth,
   medalUpgradeDefinitionsByCost,
   quoteMedalUpgrade,
@@ -27,6 +28,9 @@ describe('Medal upgrades', () => {
         new Decimal(0),
       ).status,
     ).toBe('owned')
+    expect(
+      quoteMedalUpgrade('golden-safety-net', EMPTY_MEDAL_UPGRADE_LEVELS, new Decimal(2)).status,
+    ).toBe('available')
   })
 
   it('doubles Point gains only after purchase', () => {
@@ -40,14 +44,16 @@ describe('Medal upgrades', () => {
     expect(medalUpgradeDefinitionsByCost().map(({ id, cost }) => [id, cost.toNumber()])).toEqual([
       ['double-point-gain', 1],
       ['larger-targets', 1],
+      ['point-expansion', 1],
       ['shorter-jackpot', 2],
-      ['golden-safety-net', 3],
+      ['golden-safety-net', 2],
+      ['golden-control', 3],
       ['jackpot-mastery', 5],
       ['research', 10],
     ])
   })
 
-  it('combines target size and Jackpot reductions additively', () => {
+  it('combines target-size multipliers and Jackpot reductions', () => {
     expect(medalTargetHalfWidth(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(TARGET_HALF_WIDTH_RADIANS)
     expect(
       medalTargetHalfWidth({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'larger-targets': 1 }),
@@ -58,7 +64,7 @@ describe('Medal upgrades', () => {
         'larger-targets': 1,
         'jackpot-mastery': 1,
       }),
-    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2)
+    ).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2.25)
 
     expect(medalRequiredHits(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(REQUIRED_HITS)
     expect(medalRequiredHits({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'shorter-jackpot': 1 })).toBe(45)
@@ -75,5 +81,12 @@ describe('Medal upgrades', () => {
   it('adds one independent miss allowance', () => {
     expect(medalMissesPerRun(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(0)
     expect(medalMissesPerRun({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'golden-safety-net': 1 })).toBe(1)
+  })
+
+  it('applies Golden Control as a 25% speed-scaling reduction', () => {
+    expect(medalSpeedScalingMultiplier(EMPTY_MEDAL_UPGRADE_LEVELS)).toBe(1)
+    expect(
+      medalSpeedScalingMultiplier({ ...EMPTY_MEDAL_UPGRADE_LEVELS, 'golden-control': 1 }),
+    ).toBe(0.75)
   })
 })

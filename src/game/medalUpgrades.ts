@@ -5,8 +5,10 @@ import { REQUIRED_HITS, TARGET_HALF_WIDTH_RADIANS } from './constants'
 export type MedalUpgradeId =
   | 'double-point-gain'
   | 'larger-targets'
+  | 'point-expansion'
   | 'shorter-jackpot'
   | 'golden-safety-net'
+  | 'golden-control'
   | 'jackpot-mastery'
   | 'research'
 
@@ -30,8 +32,10 @@ export interface MedalUpgradeQuote {
 export const EMPTY_MEDAL_UPGRADE_LEVELS: MedalUpgradeLevels = {
   'double-point-gain': 0,
   'larger-targets': 0,
+  'point-expansion': 0,
   'shorter-jackpot': 0,
   'golden-safety-net': 0,
+  'golden-control': 0,
   'jackpot-mastery': 0,
   research: 0,
 }
@@ -50,15 +54,27 @@ export const MEDAL_UPGRADE_DEFINITIONS: readonly MedalUpgradeDefinition[] = [
     cost: new Decimal(1),
   },
   {
+    id: 'point-expansion',
+    name: 'Point Expansion',
+    description: 'Unlock three new expensive Point upgrades.',
+    cost: new Decimal(1),
+  },
+  {
     id: 'shorter-jackpot',
     name: 'Faster Jackpot',
-    description: 'Reduce the Jackpot requirement by 5 targets and unlock two Point upgrades.',
+    description: 'Reduce the Jackpot requirement by 5 targets.',
     cost: new Decimal(2),
   },
   {
     id: 'golden-safety-net',
     name: 'Golden Safety Net',
     description: 'Miss one extra target per run without failing.',
+    cost: new Decimal(2),
+  },
+  {
+    id: 'golden-control',
+    name: 'Golden Control',
+    description: 'Reduce speed scaling per target by 25%.',
     cost: new Decimal(3),
   },
   {
@@ -100,14 +116,18 @@ export function medalPointGainMultiplier(levels: MedalUpgradeLevels): Decimal {
   return new Decimal(levels['double-point-gain'] > 0 ? 2 : 1)
 }
 
+export function medalSpeedScalingMultiplier(levels: MedalUpgradeLevels): number {
+  return levels['golden-control'] > 0 ? 0.75 : 1
+}
+
 export function medalUpgradeDefinitionsByCost(): readonly MedalUpgradeDefinition[] {
   return MEDAL_UPGRADES_BY_COST
 }
 
 export function medalTargetHalfWidth(levels: MedalUpgradeLevels): number {
-  const sizeLevels =
-    (levels['larger-targets'] > 0 ? 1 : 0) + (levels['jackpot-mastery'] > 0 ? 1 : 0)
-  return TARGET_HALF_WIDTH_RADIANS * (1 + sizeLevels * 0.5)
+  const largerTargetsMultiplier = levels['larger-targets'] > 0 ? 1.5 : 1
+  const jackpotMasteryMultiplier = levels['jackpot-mastery'] > 0 ? 1.5 : 1
+  return TARGET_HALF_WIDTH_RADIANS * largerTargetsMultiplier * jackpotMasteryMultiplier
 }
 
 export function medalRequiredHits(levels: MedalUpgradeLevels): number {

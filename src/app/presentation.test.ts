@@ -25,6 +25,7 @@ const active: ActiveRunState = {
   directionRetentionChance: 0,
   completionMedals: 1,
   completionBonusRate: 0.25,
+  preserveStreakOnShield: false,
 }
 
 const failed: FailedRunState = {

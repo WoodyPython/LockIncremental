@@ -36,6 +36,9 @@ describe('upgrade definitions and purchases', () => {
 
   it('uses the concise critical chance upgrade copy', () => {
     expect(definition('critical-chance').description).toBe('Increase critical chance by +0.5%.')
+    expect(definition('critical-hits').description).toContain(
+      'unlock the Critical Chance Point upgrade',
+    )
   })
 
   it('reveals one-time upgrades after the first goal and crit chance after its prerequisite', () => {
@@ -60,18 +63,27 @@ describe('upgrade definitions and purchases', () => {
     ).toBe(true)
   })
 
-  it('reveals the late Point upgrades only after Shorter Jackpot is owned', () => {
+  it('reveals three late Point upgrades only after Point Expansion is owned', () => {
     const plenty = new Decimal('1e100')
     expect(quoteUpgrade('rapid-recovery', EMPTY_UPGRADE_LEVELS, plenty, plenty).status).toBe(
       'hidden',
     )
-    const medalLevels = { ...EMPTY_MEDAL_UPGRADE_LEVELS, 'shorter-jackpot': 1 }
+    const oldPrerequisite = { ...EMPTY_MEDAL_UPGRADE_LEVELS, 'shorter-jackpot': 1 }
+    expect(
+      quoteUpgrade('efficient-scaling', EMPTY_UPGRADE_LEVELS, plenty, plenty, oldPrerequisite)
+        .status,
+    ).toBe('hidden')
+    const medalLevels = { ...EMPTY_MEDAL_UPGRADE_LEVELS, 'point-expansion': 1 }
     expect(
       quoteUpgrade('rapid-recovery', EMPTY_UPGRADE_LEVELS, plenty, plenty, medalLevels).status,
     ).toBe('available')
     expect(
       quoteUpgrade('efficient-scaling', EMPTY_UPGRADE_LEVELS, plenty, plenty, medalLevels).status,
     ).toBe('available')
+    expect(
+      quoteUpgrade('shielded-streak', EMPTY_UPGRADE_LEVELS, plenty, plenty, medalLevels).status,
+    ).toBe('available')
+    expect(definition('shielded-streak').baseCost.eq(100_000)).toBe(true)
   })
 
   it('reveals every one-time upgrade together when the first goal completes', () => {
@@ -104,8 +116,9 @@ describe('upgrade definitions and purchases', () => {
     expect(targetValueMultiplier(2).eq(1.5)).toBe(true)
     expect(targetValueMultiplier(3).eq(1.75)).toBe(true)
     expect(consecutiveMultiplier(2, true).eq(1.1025)).toBe(true)
+    expect(consecutiveMultiplier(2, true, true).eq(1.1449)).toBe(true)
     expect(pointGainMultiplier({ ...EMPTY_UPGRADE_LEVELS, 'double-points': 1 }).eq(2)).toBe(true)
-    expect(criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1 })).toBe(0.03)
+    expect(criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1 })).toBe(0.05)
     expect(
       criticalChance({ ...EMPTY_UPGRADE_LEVELS, 'critical-hits': 1, 'critical-chance': 500 }),
     ).toBe(1)
@@ -140,6 +153,12 @@ describe('upgrade definitions and purchases', () => {
       { ...EMPTY_MEDAL_UPGRADE_LEVELS, 'golden-safety-net': 1 },
     )
     expect(bothMisses.missesPerRun).toBe(2)
+
+    const combinedSpeed = runModifiersForUpgrades(
+      { ...EMPTY_UPGRADE_LEVELS, 'speed-scaling': 1 },
+      { ...EMPTY_MEDAL_UPGRADE_LEVELS, 'golden-control': 1 },
+    )
+    expect(combinedSpeed.speedScalingMultiplier).toBeCloseTo(0.6)
   })
 
   it('spends Points, rejects unavailable purchases, and prevents duplicate one-time purchases', () => {
@@ -220,6 +239,7 @@ describe('upgrade definitions and purchases', () => {
       'miss-allowance',
       'rapid-recovery',
       'efficient-scaling',
+      'shielded-streak',
     ])
   })
 })

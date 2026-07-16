@@ -101,6 +101,7 @@ describe('GameSimulation progression', () => {
     expect(game.purchaseMedalUpgrade('larger-targets').kind).toBe('purchased')
     expect(game.purchaseMedalUpgrade('shorter-jackpot').kind).toBe('purchased')
     expect(game.purchaseMedalUpgrade('jackpot-mastery').kind).toBe('purchased')
+    expect(game.purchaseMedalUpgrade('golden-control').kind).toBe('purchased')
 
     const effectiveTierTwo = game.getEffectiveTierStats('tier-2')
     expect(effectiveTierTwo).toMatchObject({
@@ -108,12 +109,12 @@ describe('GameSimulation progression', () => {
       requiredHits: 65,
       baseSpeedGrowthPerHit: 0.0975,
       baseTargetHalfWidthRadians: TARGET_HALF_WIDTH_RADIANS * 0.5,
-      targetHalfWidthRadians: TARGET_HALF_WIDTH_RADIANS,
+      targetHalfWidthRadians: TARGET_HALF_WIDTH_RADIANS * 1.125,
       basePointGainMultiplier: 2.5,
       pointGainMultiplier: 10,
       completionBonusRate: 0.5,
     })
-    expect(effectiveTierTwo.speedGrowthPerHit).toBeCloseTo(0.078)
+    expect(effectiveTierTwo.speedGrowthPerHit).toBeCloseTo(0.0585)
 
     const beforePoints = game.getSnapshot().points
     const beforeMedals = game.getSnapshot().medals
@@ -122,8 +123,8 @@ describe('GameSimulation progression', () => {
     expect(run.kind).toBe('active')
     if (run.kind !== 'active') throw new Error('Expected an active run')
     expect(run.requiredHits).toBe(65)
-    expect(run.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS)
-    expect(run.speedScalingMultiplier).toBeCloseTo(1.2)
+    expect(run.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 1.125)
+    expect(run.speedScalingMultiplier).toBeCloseTo(0.9)
     expect(run.directionRetentionChance).toBe(0.5)
     expect(run.completionMedals).toBe(5)
 
@@ -255,13 +256,39 @@ describe('GameSimulation progression', () => {
     }
   })
 
-  it('purchases Medal-gated Point upgrades only after Shorter Jackpot', () => {
-    const game = new GameSimulation({ initialPoints: 100_000, initialMedals: 2 })
+  it('purchases three Medal-gated Point upgrades only after Point Expansion', () => {
+    const game = new GameSimulation({ initialPoints: 200_000, initialMedals: 1 })
     expect(game.purchase('rapid-recovery').kind).toBe('hidden')
     expect(game.purchase('efficient-scaling').kind).toBe('hidden')
-    expect(game.purchaseMedalUpgrade('shorter-jackpot').kind).toBe('purchased')
+    expect(game.purchase('shielded-streak').kind).toBe('hidden')
+    expect(game.purchaseMedalUpgrade('point-expansion').kind).toBe('purchased')
     expect(game.purchase('rapid-recovery').kind).toBe('purchased')
     expect(game.purchase('efficient-scaling').kind).toBe('purchased')
+    expect(game.purchase('shielded-streak').kind).toBe('purchased')
+  })
+
+  it('preserves and strengthens a consecutive streak through a forgiven Shield miss', () => {
+    const game = new GameSimulation({
+      initialPoints: 200_000,
+      initialMedals: 1,
+      targetRandom: () => 0,
+      criticalRandom: () => 1,
+    })
+    expect(game.purchaseMedalUpgrade('point-expansion').kind).toBe('purchased')
+    expect(game.purchase('consecutive-value').kind).toBe('purchased')
+    expect(game.purchase('miss-allowance').kind).toBe('purchased')
+    expect(game.purchase('shielded-streak').kind).toBe('purchased')
+    expect(game.activate(0).kind).toBe('started')
+    expect(hitCurrentTarget(game, 0).kind).toBe('hit')
+
+    const forgiven = game.activate(100_000)
+    expect(forgiven.kind).toBe('forgiven-miss')
+    if (forgiven.kind !== 'forgiven-miss') throw new Error('Expected a forgiven miss')
+    expect(forgiven.state.consecutiveHits).toBe(1)
+
+    const nextHit = hitCurrentTarget(game, 101_000)
+    expect(nextHit.kind).toBe('hit')
+    expect(nextHit.reward.eq(1.07)).toBe(true)
   })
 
   it('applies run-shaping Medal purchases on the next run', () => {
@@ -288,7 +315,7 @@ describe('GameSimulation progression', () => {
     expect(upgraded.kind).toBe('active')
     if (upgraded.kind !== 'active') throw new Error('Expected active run')
     expect(upgraded.requiredHits).toBe(40)
-    expect(upgraded.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2)
+    expect(upgraded.targetHalfWidth).toBeCloseTo(TARGET_HALF_WIDTH_RADIANS * 2.25)
     expect(upgraded.missesRemaining).toBe(1)
   })
 

@@ -24,6 +24,7 @@ export interface RunModifiers {
   readonly directionRetentionChance: number
   readonly completionMedals: number
   readonly completionBonusRate: number
+  readonly preserveStreakOnShield: boolean
 }
 
 export const DEFAULT_RUN_MODIFIERS: RunModifiers = {
@@ -36,6 +37,7 @@ export const DEFAULT_RUN_MODIFIERS: RunModifiers = {
   directionRetentionChance: 0,
   completionMedals: JACKPOT_MEDAL_REWARD,
   completionBonusRate: COMPLETION_BONUS_RATE,
+  preserveStreakOnShield: false,
 }
 
 export interface IdleRunState {
@@ -62,6 +64,7 @@ export interface ActiveRunState {
   readonly directionRetentionChance: number
   readonly completionMedals: number
   readonly completionBonusRate: number
+  readonly preserveStreakOnShield: boolean
 }
 
 export interface FailedRunState {
@@ -137,6 +140,7 @@ export function startRun(
     directionRetentionChance: modifiers.directionRetentionChance,
     completionMedals: modifiers.completionMedals,
     completionBonusRate: modifiers.completionBonusRate,
+    preserveStreakOnShield: modifiers.preserveStreakOnShield,
   }
 }
 
@@ -161,8 +165,10 @@ function forgiveMiss(
   now: number,
   rollCriticalTarget: () => boolean,
 ): ActiveRunState {
+  const relocated = relocateTarget(state, random, rollCriticalTarget)
   return {
-    ...relocateTarget(state, random, rollCriticalTarget),
+    ...relocated,
+    consecutiveHits: state.preserveStreakOnShield ? state.consecutiveHits : 0,
     missesRemaining: state.missesRemaining - 1,
     invulnerableUntil: now + SHIELD_RECOVERY_MS,
   }
